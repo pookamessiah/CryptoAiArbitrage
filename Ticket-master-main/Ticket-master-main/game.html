@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed-Size Canvas Viewport Effect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <style>
+        /* Using a more modern font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Page background color from the poster */
+            background-color: #FD3A73;
+        }
+        /* Restoring fixed-size container */
+        .viewport-container {
+            width: 550px;
+            height: 550px;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen m-0 p-4">
+    <!-- Main container for the canvas with fixed dimensions -->
+    <div class="viewport-container bg-black rounded-lg shadow-xl flex items-center justify-center">
+        <canvas id="viewportCanvas" width="550" height="550" class="rounded-lg cursor-pointer"></canvas>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('viewportCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const particleCount = 2500;
+            const particles = [];
+            // --- ASCII Layer Setup ---
+            const asciiChars = "▓▒░▚▀▄▌▐▕▔▖▗▘▙▛▜▝▞▟█▉▊▋▍▎▏■□▢▣▤▥▦▩▬▭▮▯▰▱◆◇◈◉○●◐◑◒◓◔◕◖◗─│┌┐└┘├┤┬┴┼━┃┏┓┗┛┣┫┳┻╋┄┅┆┇┈┉┊┋═║╔╗╚╝╠╣╦╩╬╭╮╯╰╱╲╳";
+            const baseFontSize = 16;
+            const fontFamily = 'monospace';
+            const cols = Math.floor(canvas.width / baseFontSize);
+            const rows = Math.floor(canvas.height / baseFontSize);
+            let asciiGrid = [];
+            // Function to initialize the character grid
+            function initializeAsciiGrid() {
+                for (let i = 0; i < rows; i++) {
+                    asciiGrid[i] = [];
+                    for (let j = 0; j < cols; j++) {
+                        asciiGrid[i][j] = asciiChars[Math.floor(Math.random() * asciiChars.length)];
+                    }
+                }
+            }
+            // Function to draw and animate the ASCII layer
+            function drawAsciiLayer(time) {
+                // Increased the multiplier to make the breathing effect more prominent
+                const breathe = 1.0 + Math.sin(time * 0.5) * 0.4;
+                const breathingFontSize = baseFontSize * breathe;
+                ctx.font = `${breathingFontSize}px ${fontFamily}`;
+                // ASCII layer is now orange
+                ctx.fillStyle = 'rgba(255, 132, 0, 0.6)'; 
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                for (let i = 0; i < rows; i++) {
+                    for (let j = 0; j < cols; j++) {
+                        // Randomly change characters for a shimmering effect
+                        if (Math.random() > 0.99) {
+                            asciiGrid[i][j] = asciiChars[Math.floor(Math.random() * asciiChars.length)];
+                        }
+                        const char = asciiGrid[i][j];
+                        // Adjust position based on base font size to prevent grid from shifting
+                        const x = j * baseFontSize + baseFontSize / 2;
+                        const y = i * baseFontSize + baseFontSize / 2;
+                        ctx.fillText(char, x, y);
+                    }
+                }
+            }
+            
+            // --- Particle Class ---
+            class Particle {
+                constructor() {
+                    this.centerX = canvas.width / 2;
+                    this.centerY = canvas.height / 2;
+                    this.reset();
+                }
+                reset() {
+                    const t = Math.random();
+                    this.initialAngle = t * Math.PI * 20;
+                    this.initialRadius = 0.6 + t * 2.2;
+                    this.x = this.initialRadius * Math.cos(this.initialAngle);
+                    this.y = this.initialRadius * Math.sin(this.initialAngle);
+                    this.z = (t - 0.5) * 5;
+                    this.size = 0.03 + 0.04 * Math.random();
+                    this.opacity = 0.4 + 0.6 * Math.random();
+                    this.index = Math.random() * 1000;
+                }
+                
+                update(time) {
+                    const breathe = 1.0 + Math.sin(time * 0.5) * 0.1;
+                    let r = this.initialRadius * breathe;
+                    const spinSpeed = 0.1;
+                    const currentAngle = this.initialAngle + (time * spinSpeed);
+                    this.x = r * Math.cos(currentAngle);
+                    this.y = r * Math.sin(currentAngle);
+                    this.z += Math.sin(time * 0.2 + this.index * 0.01) * 0.2;
+                    this.currentOpacity = this.opacity * (0.5 + 0.5 * Math.cos(this.z));
+                    const scale = 80;
+                    const radiusForBoundsCheck = r * scale;
+                    const maxRadius = Math.min(this.centerX, this.centerY) * 1.5;
+                    if (radiusForBoundsCheck > maxRadius) {
+                        this.reset();
+                    }
+                }
+                
+                draw() {
+                    const scale = 80;
+                    const screenX = this.centerX + this.x * scale;
+                    const screenY = this.centerY + this.y * scale;
+                    const screenSize = this.size * 40;
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, screenSize, 0, Math.PI * 2);
+                    // Particles are now pink, matching the background
+                    ctx.fillStyle = `rgba(253, 58, 115, ${this.currentOpacity})`;
+                    ctx.fill();
+                }
+            }
+            
+            // --- Canvas and Animation Setup ---
+            
+            // Initialize particles and ASCII grid
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+            initializeAsciiGrid();
+            
+            let time = 0;
+            let audioStarted = false;
+            
+            // --- Tone.js Soundtrack Setup ---
+            let pad, lead, bass, kick, snare, ride, wind, windFilter, masterVolume, limiter;
+            let reverb, delay, phaser;
+            let padPart, leadPart, bassPart, drumPart;
+            
+            // Animation loop
+            function animate() {
+                // 1. Draw blue viewport background
+                ctx.fillStyle = '#01B2FE';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 2. Draw the new animated ASCII layer, passing in the current time
+                drawAsciiLayer(time);
+                // 3. Update and draw the pink particles on top
+                particles.forEach(particle => {
+                    particle.update(time);
+                    particle.draw();
+                });
+                
+                time += 0.01;
+                requestAnimationFrame(animate);
+            }
+            
+            // --- Initial setup ---
+            // Start animation immediately
+            animate();
+            
+            // Setup audio on first canvas click
+            canvas.addEventListener('click', async function() {
+                if (!audioStarted) {
+                    try {
+                        // Start the audio context
+                        await Tone.start();
+                        
+                        // Initialize Tone.js
+                        Tone.Transport.bpm.value = 68;
+                        Tone.Transport.timeSignature = 4;
+                        
+                        // Create master effects chain
+                        masterVolume = new Tone.Volume(-15).toDestination();
+                        
+                        // Effects
+                        reverb = new Tone.Reverb({
+                            decay: 12,
+                            wet: 0.7
+                        }).connect(masterVolume);
+                        
+                        delay = new Tone.FeedbackDelay({
+                            delayTime: "8n.",
+                            feedback: 0.6,
+                            wet: 0.4
+                        }).connect(masterVolume);
+                        
+                        phaser = new Tone.Phaser({
+                            frequency: 0.2,
+                            octaves: 5,
+                            baseFrequency: 1000,
+                            wet: 0.3
+                        }).connect(masterVolume);
+                        
+                        // Atmospheric pad (Richard Wright style)
+                        pad = new Tone.PolySynth(Tone.Synth, {
+                            oscillator: { type: "sawtooth" },
+                            envelope: {
+                                attack: 3,
+                                decay: 1,
+                                sustain: 0.8,
+                                release: 5
+                            },
+                            volume: -12
+                        }).connect(reverb);
+                        
+                        // Lead guitar (David Gilmour style)
+                        lead = new Tone.Synth({
+                            oscillator: { type: "triangle" },
+                            envelope: {
+                                attack: 0.1,
+                                decay: 0.4,
+                                sustain: 0.6,
+                                release: 2
+                            },
+                            volume: -8
+                        });
+                        lead.connect(delay);
+                        lead.connect(reverb);
+                        
+                        // Bass (Roger Waters style)
+                        bass = new Tone.MonoSynth({
+                            oscillator: { type: "square" },
+                            filter: { 
+                                Q: 2, 
+                                type: "lowpass", 
+                                frequency: 600 
+                            },
+                            envelope: {
+                                attack: 0.05,
+                                decay: 0.3,
+                                sustain: 0.5,
+                                release: 1
+                            },
+                            volume: -10
+                        }).connect(phaser);
+                        
+                        // Drums (Nick Mason style)
+                        kick = new Tone.MembraneSynth({
+                            pitchDecay: 0.05,
+                            octaves: 4,
+                            oscillator: { type: "sine" },
+                            envelope: {
+                                attack: 0.01,
+                                decay: 0.5,
+                                sustain: 0.01,
+                                release: 0.8
+                            },
+                            volume: -8
+                        }).connect(reverb);
+                        
+                        snare = new Tone.NoiseSynth({
+                            noise: { type: "white" },
+                            envelope: {
+                                attack: 0.005,
+                                decay: 0.3,
+                                sustain: 0
+                            },
+                            volume: -10
+                        }).connect(reverb);
+                        
+                        ride = new Tone.MetalSynth({
+                            frequency: 600,
+                            envelope: {
+                                attack: 0.001,
+                                decay: 2,
+                                sustain: 0
+                            },
+                            harmonicity: 5.1,
+                            modulationIndex: 32,
+                            resonance: 3000,
+                            octaves: 1.5,
+                            volume: -12
+                        }).connect(reverb);
+                        
+                        // Wind atmosphere
+                        wind = new Tone.Noise({
+                            type: "brown",
+                            volume: -25
+                        });
+                        windFilter = new Tone.Filter(400, "lowpass");
+                        wind.connect(windFilter);
+                        windFilter.connect(masterVolume);
+                        
+                        // Chord progression
+                        const chords = [
+                            { name: "Dm9", notes: ["D3", "F3", "A3", "C4", "E4"] },
+                            { name: "Gm7", notes: ["G2", "Bb3", "D4", "F4"] },
+                            { name: "Cmaj7", notes: ["C3", "E3", "G3", "B3"] },
+                            { name: "Fmaj7", notes: ["F2", "A3", "C4", "E4"] }
+                        ];
+                        
+                        // Melodic patterns for each chord
+                        const melodies = {
+                            "Dm9": [
+                                { time: "0:1", note: "A4", duration: "8n." },
+                                { time: "0:2", note: "F4", duration: "8n" },
+                                { time: "0:2.5", note: "D4", duration: "8n" },
+                                { time: "0:3", note: "F4", duration: "8n" },
+                                { time: "1:1", note: "E4", duration: "8n." },
+                                { time: "1:2", note: "D4", duration: "8n" },
+                                { time: "1:2.5", note: "C4", duration: "8n" },
+                                { time: "1:3", note: "D4", duration: "8n" }
+                            ],
+                            "Gm7": [
+                                { time: "0:1", note: "Bb4", duration: "8n." },
+                                { time: "0:2", note: "G4", duration: "8n" },
+                                { time: "0:2.5", note: "D4", duration: "8n" },
+                                { time: "0:3", note: "G4", duration: "8n" },
+                                { time: "1:1", note: "A4", duration: "8n." },
+                                { time: "1:2", note: "G4", duration: "8n" },
+                                { time: "1:2.5", note: "F4", duration: "8n" },
+                                { time: "1:3", note: "G4", duration: "8n" }
+                            ],
+                            "Cmaj7": [
+                                { time: "0:1", note: "E4", duration: "8n." },
+                                { time: "0:2", note: "G4", duration: "8n" },
+                                { time: "0:2.5", note: "B4", duration: "8n" },
+                                { time: "0:3", note: "C5", duration: "8n" },
+                                { time: "1:1", note: "G4", duration: "8n." },
+                                { time: "1:2", note: "E4", duration: "8n" },
+                                { time: "1:2.5", note: "D4", duration: "8n" },
+                                { time: "1:3", note: "E4", duration: "8n" }
+                            ],
+                            "Fmaj7": [
+                                { time: "0:1", note: "A4", duration: "8n." },
+                                { time: "0:2", note: "F4", duration: "8n" },
+                                { time: "0:2.5", note: "C4", duration: "8n" },
+                                { time: "0:3", note: "F4", duration: "8n" },
+                                { time: "1:1", note: "G4", duration: "8n." },
+                                { time: "1:2", note: "E4", duration: "8n" },
+                                { time: "1:2.5", note: "D4", duration: "8n" },
+                                { time: "1:3", note: "C4", duration: "8n" }
+                            ]
+                        };
+                        
+                        // Bass patterns
+                        const bassPatterns = {
+                            "Dm9": [
+                                { time: "0:0", note: "D2", duration: "4n" },
+                                { time: "0:2", note: "F2", duration: "8n" },
+                                { time: "0:2.5", note: "A2", duration: "8n" },
+                                { time: "1:0", note: "A2", duration: "4n" },
+                                { time: "1:2", note: "F2", duration: "8n" },
+                                { time: "1:2.5", note: "D2", duration: "8n" }
+                            ],
+                            "Gm7": [
+                                { time: "0:0", note: "G2", duration: "4n" },
+                                { time: "0:2", note: "Bb2", duration: "8n" },
+                                { time: "0:2.5", note: "D3", duration: "8n" },
+                                { time: "1:0", note: "D3", duration: "4n" },
+                                { time: "1:2", note: "Bb2", duration: "8n" },
+                                { time: "1:2.5", note: "G2", duration: "8n" }
+                            ],
+                            "Cmaj7": [
+                                { time: "0:0", note: "C2", duration: "4n" },
+                                { time: "0:2", note: "E2", duration: "8n" },
+                                { time: "0:2.5", note: "G2", duration: "8n" },
+                                { time: "1:0", note: "G2", duration: "4n" },
+                                { time: "1:2", note: "E2", duration: "8n" },
+                                { time: "1:2.5", note: "C2", duration: "8n" }
+                            ],
+                            "Fmaj7": [
+                                { time: "0:0", note: "F2", duration: "4n" },
+                                { time: "0:2", note: "A2", duration: "8n" },
+                                { time: "0:2.5", note: "C3", duration: "8n" },
+                                { time: "1:0", note: "C3", duration: "4n" },
+                                { time: "1:2", note: "A2", duration: "8n" },
+                                { time: "1:2.5", note: "F2", duration: "8n" }
+                            ]
+                        };
+                        
+                        // Simple drum pattern
+                        const drumPattern = [
+                            { time: "0:0", instrument: kick },
+                            { time: "0:2", instrument: snare },
+                            { time: "1:0", instrument: kick },
+                            { time: "1:2", instrument: snare },
+                            { time: "0:1", instrument: ride },
+                            { time: "0:3", instrument: ride },
+                            { time: "1:1", instrument: ride },
+                            { time: "1:3", instrument: ride }
+                        ];
+                        
+                        // Create parts
+                        padPart = new Tone.Part((time, chord) => {
+                            pad.triggerAttackRelease(chord.notes, "2m", time);
+                        }, chords.map((chord, i) => {
+                            return { time: `${i}:0`, notes: chord.notes };
+                        }));
+                        
+                        // Create lead parts for each chord
+                        const leadParts = [];
+                        chords.forEach((chord, index) => {
+                            const part = new Tone.Part((time, { note, duration }) => {
+                                lead.triggerAttackRelease(note, duration, time);
+                            }, melodies[chord.name].map(note => ({
+                                ...note,
+                                time: note.time.replace(/^\d+/, index.toString())
+                            })));
+                            leadParts.push(part);
+                        });
+                        
+                        // Create bass parts for each chord
+                        const bassParts = [];
+                        chords.forEach((chord, index) => {
+                            const part = new Tone.Part((time, { note, duration }) => {
+                                bass.triggerAttackRelease(note, duration, time);
+                            }, bassPatterns[chord.name].map(note => ({
+                                ...note,
+                                time: note.time.replace(/^\d+/, index.toString())
+                            })));
+                            bassParts.push(part);
+                        });
+                        
+                        drumPart = new Tone.Part((time, instrument) => {
+                            instrument.triggerAttackRelease("8n", time);
+                        }, drumPattern);
+                        
+                        // Set loops
+                        padPart.loop = true;
+                        padPart.loopEnd = "4m";
+                        
+                        leadParts.forEach(part => {
+                            part.loop = true;
+                            part.loopEnd = "2m";
+                        });
+                        
+                        bassParts.forEach(part => {
+                            part.loop = true;
+                            part.loopEnd = "2m";
+                        });
+                        
+                        drumPart.loop = true;
+                        drumPart.loopEnd = "2m";
+                        
+                        // Start everything
+                        Tone.Transport.start();
+                        padPart.start(0);
+                        leadParts.forEach((part, i) => part.start(`${i}:0`));
+                        bassParts.forEach((part, i) => part.start(`${i}:0`));
+                        drumPart.start(0);
+                        
+                        // Start wind
+                        wind.start();
+                        
+                        // Dynamic automation
+                        Tone.Transport.scheduleRepeat((time) => {
+                            const position = Tone.Transport.position.split(':');
+                            const bar = parseInt(position[0]);
+                            const beat = parseInt(position[1]);
+                            
+                            // Modulate reverb size
+                            if (bar % 8 === 0) {
+                                reverb.decay = 12 + Math.sin(bar * 0.1) * 4;
+                            }
+                            
+                            // Modulate phaser
+                            phaser.frequency.value = 0.1 + Math.sin(time * 0.1) * 0.1;
+                            
+                            // Pad volume swells
+                            if (beat === 0) {
+                                pad.volume.linearRampToValueAtTime(-15, time);
+                                pad.volume.linearRampToValueAtTime(-8, time + 2);
+                            } else if (beat === 2) {
+                                pad.volume.linearRampToValueAtTime(-8, time);
+                                pad.volume.linearRampToValueAtTime(-15, time + 2);
+                            }
+                            
+                            // Wind modulation
+                            windFilter.frequency.linearRampToValueAtTime(
+                                400 + Math.sin(time * 0.05) * 200, 
+                                time
+                            );
+                        }, "1m");
+                        
+                        audioStarted = true;
+                        console.log('Audio started successfully');
+                        
+                    } catch (e) {
+                        console.error('Error starting audio:', e);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
