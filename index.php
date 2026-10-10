@@ -264,13 +264,16 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 
         .btn-trade {
             display: block;
+            width: 100%;
             text-align: center;
             background: var(--green);
             color: #000;
             font-weight: 700;
             padding: 10px 0;
+            border: none;
             border-radius: 6px;
             text-decoration: none;
+            cursor: pointer;
             transition: opacity 0.2s ease;
         }
         .btn-trade:hover { opacity: 0.9; }
@@ -830,38 +833,52 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                     { id: 8, symbol: 'LINK', name: 'Chainlink', buyEx: 'KuCoin (Spot)', buyPrice: linkBuy, sellEx: 'dYdX (DEX Perp)', sellPrice: linkSell, profit: linkProfit, time: '15 - 30 mins' }
                 ];
 
-                // Render Carousel / Grid Cards
+                // Render Carousel / Grid Cards with POST forms for trade.php
                 let carouselHTML = '';
                 let tickerHTML = '';
 
                 liveDeals.forEach(d => {
                     carouselHTML += `
                         <div class="trade-card">
-                            <div class="card-top">
-                                <div class="coin-info">
-                                    <div class="coin-icon">${d.symbol.substring(0, 3)}</div>
-                                    <div class="coin-name">
-                                        <h4>${d.name}</h4>
-                                        <span>${d.symbol}/USDT</span>
+                            <div>
+                                <div class="card-top">
+                                    <div class="coin-info">
+                                        <div class="coin-icon">${d.symbol.substring(0, 3)}</div>
+                                        <div class="coin-name">
+                                            <h4>${d.name}</h4>
+                                            <span>${d.symbol}/USDT</span>
+                                        </div>
+                                    </div>
+                                    <div class="profit-tag">+${d.profit.toFixed(2)}%</div>
+                                </div>
+                                <div class="exchange-route">
+                                    <div class="route-row">
+                                        <span style="color: var(--text-muted);">Buy On:</span>
+                                        <strong>${d.buyEx} ($${d.buyPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})</strong>
+                                    </div>
+                                    <div class="route-row">
+                                        <span style="color: var(--text-muted);">Sell On:</span>
+                                        <strong style="color: var(--green);">${d.sellEx} ($${d.sellPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})</strong>
                                     </div>
                                 </div>
-                                <div class="profit-tag">+${d.profit.toFixed(2)}%</div>
                             </div>
-                            <div class="exchange-route">
-                                <div class="route-row">
-                                    <span style="color: var(--text-muted);">Buy On:</span>
-                                    <strong>${d.buyEx} ($${d.buyPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})</strong>
+                            <div>
+                                <div class="card-meta">
+                                    <span><i class="fa-regular fa-clock"></i> ${d.time}</span>
+                                    <span><i class="fa-solid fa-shield-halved"></i> Managed</span>
                                 </div>
-                                <div class="route-row">
-                                    <span style="color: var(--text-muted);">Sell On:</span>
-                                    <strong style="color: var(--green);">${d.sellEx} ($${d.sellPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})})</strong>
-                                </div>
+                                <form action="trade.php" method="POST">
+                                    <input type="hidden" name="symbol" value="${d.symbol}">
+                                    <input type="hidden" name="coin_name" value="${d.name}">
+                                    <input type="hidden" name="buy_exchange" value="${d.buyEx}">
+                                    <input type="hidden" name="sell_exchange" value="${d.sellEx}">
+                                    <input type="hidden" name="buy_price" value="${d.buyPrice}">
+                                    <input type="hidden" name="sell_price" value="${d.sellPrice}">
+                                    <input type="hidden" name="profit_percentage" value="${d.profit}">
+                                    <input type="hidden" name="estimated_time" value="${d.time}">
+                                    <button type="submit" class="btn-trade">Trade Now</button>
+                                </form>
                             </div>
-                            <div class="card-meta">
-                                <span><i class="fa-regular fa-clock"></i> ${d.time}</span>
-                                <span><i class="fa-solid fa-shield-halved"></i> Managed</span>
-                            </div>
-                            <a href="trade.php?id=${d.id}" class="btn-trade">Trade Now</a>
                         </div>
                     `;
 
@@ -916,7 +933,6 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                 `;
                 document.getElementById('priceMonitorTable').innerHTML = priceTableHTML;
 
-                // Also update stats on refresh
                 updatePlatformStats();
 
             } catch (error) {
@@ -946,12 +962,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             loadTradingViewWidget(symbol);
         }
 
-        // Initialize on page load and set 15-minute auto-refresh interval
         document.addEventListener('DOMContentLoaded', function() {
             loadTradingViewWidget('BINANCE:BTCUSDT');
             fetchLiveMarketData();
-
-            // 15 Minutes = 15 * 60 * 1000 ms = 900,000 ms
             setInterval(fetchLiveMarketData, 15 * 60 * 1000);
         });
     </script>
