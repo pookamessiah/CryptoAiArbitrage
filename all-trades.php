@@ -1,5 +1,5 @@
 <?php
-// all-trades.php - Full Arbitrage Marketplace with Live 15-Min Auto-Refresh Prices
+// all-trades.php - Full Arbitrage Marketplace with Dynamic POST Forms & Live Refreshes
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -15,14 +15,14 @@ try {
     $db = new Database();
     $pdo =$db->connect();
 } catch (Exception $e) {
-    die($e->getMessage());
+    // Graceful fallback if database connection is pending configuration
 }
 
 function e($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-// Support details
+// Fetch support details
 $support = ['phone' => '+18001234567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
 if ($pdo) {
     try {
@@ -215,13 +215,16 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
 
         .btn-trade {
             display: block;
+            width: 100%;
             text-align: center;
             background: var(--green);
             color: #000;
             font-weight: 700;
             padding: 10px 0;
+            border: none;
             border-radius: 6px;
             text-decoration: none;
+            cursor: pointer;
             transition: opacity 0.2s ease;
         }
         .btn-trade:hover { opacity: 0.9; }
@@ -239,7 +242,8 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
 
         /* Floating Support */
         .floating-support { position: fixed; bottom: 20px; right: 20px; z-index: 99; display: flex; flex-direction: column; gap: 10px; }
-        .support-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+        .support-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: transform 0.2s; }
+        .support-btn:hover { transform: scale(1.1); }
         .sup-telegram { background: #0088cc; } .sup-whatsapp { background: #25d366; } .sup-email { background: var(--accent-blue); }
     </style>
 </head>
@@ -253,7 +257,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             <span style="color: var(--text-muted);" id="dealCount">Loading live deals...</span>
         </div>
 
-        <!-- Filter Toolbar -->
+        <!-- Search & Filter Toolbar -->
         <div class="filter-card">
             <div class="search-box">
                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -303,7 +307,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                 const prices = {};
                 data.forEach(item => { prices[item.symbol] = parseFloat(item.price); });
 
-                // Expanded dataset of 16+ coins
+                // Live market asset prices with fallbacks
                 const btc = prices['BTCUSDT'] || 64200;
                 const eth = prices['ETHUSDT'] || 3410;
                 const sol = prices['SOLUSDT'] || 141.5;
@@ -326,6 +330,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                     return { id, symbol, name, buyEx, buyPrice: buyP, sellEx, sellPrice: sellP, profit, time };
                 };
 
+                // Expanded marketplace list
                 allDealsData = [
                     makeDeal(1, 'BTC', 'Bitcoin', 'Binance (Spot)', btc, 'Hyperliquid (Perp)', btc * 1.046, '15 - 30 mins'),
                     makeDeal(2, 'ETH', 'Ethereum', 'Uniswap v3 (DEX)', eth * 0.998, 'Bybit (Futures)', eth * 1.062, '20 - 40 mins'),
@@ -404,7 +409,17 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                                     <span><i class="fa-regular fa-clock"></i> ${d.time}</span>
                                     <span><i class="fa-solid fa-shield-halved"></i> Managed</span>
                                 </div>
-                                <a href="trade.php?id=${d.symbol}" class="btn-trade">Trade Now</a>
+                                <form action="trade.php" method="POST">
+                                    <input type="hidden" name="symbol" value="${d.symbol}">
+                                    <input type="hidden" name="coin_name" value="${d.name}">
+                                    <input type="hidden" name="buy_exchange" value="${d.buyEx}">
+                                    <input type="hidden" name="sell_exchange" value="${d.sellEx}">
+                                    <input type="hidden" name="buy_price" value="${d.buyPrice}">
+                                    <input type="hidden" name="sell_price" value="${d.sellPrice}">
+                                    <input type="hidden" name="profit_percentage" value="${d.profit}">
+                                    <input type="hidden" name="estimated_time" value="${d.time}">
+                                    <button type="submit" class="btn-trade">Trade Now</button>
+                                </form>
                             </div>
                         </div>
                     `;
@@ -421,7 +436,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchAllLiveDeals();
-            setInterval(fetchAllLiveDeals, 15 * 60 * 1000); // 15 mins
+            setInterval(fetchAllLiveDeals, 15 * 60 * 1000); // Auto-refresh every 15 mins
         });
     </script>
 </body>
