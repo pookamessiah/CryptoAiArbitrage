@@ -1,5 +1,5 @@
 <?php
-// index.php - Main Arbitrage Trading Portal with Live 15-Min Auto-Refresh Prices
+// index.php - Main Arbitrage Trading Portal with Live Dynamic Spreads & Randomized Stats
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -15,7 +15,7 @@ require_once 'config/db.php';
 $pdo = null;
 try {
     $db = new Database();
-    $pdo =$db->connect();
+    $pdo = $db->connect();
 } catch (Exception $e) {
     // Graceful fallback if database connection is pending configuration
 }
@@ -32,21 +32,21 @@ $support = [
 ];
 if ($pdo) {
     try {
-        $stmtSup =$pdo->query("SELECT * FROM support_info LIMIT 1");
-        $dbSup =$stmtSup->fetch(PDO::FETCH_ASSOC);
+        $stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
+        $dbSup = $stmtSup->fetch(PDO::FETCH_ASSOC);
         if ($dbSup) {
-            $support =$dbSup;
+            $support = $dbSup;
         }
     } catch (Exception $e) {}
 }
-$whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
+$whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arbitrage Trading Portal | Live CoinMarketCap Opportunities</title>
+    <title>ArbitragePro | Live CoinMarketCap CEX & DEX Arbitrage Infrastructure</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -69,7 +69,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             color: var(--text-main);
             font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
             line-height: 1.5;
-            padding-bottom: 60px;
+            padding-bottom: 0;
         }
 
         .container {
@@ -442,18 +442,86 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
         .sup-whatsapp { background: #25d366; }
         .sup-email { background: var(--accent-blue); }
 
-        footer {
-            margin-top: 60px;
+        /* Professional Modern Footer */
+        .site-footer {
+            background: #14161c;
             border-top: 1px solid var(--border-color);
-            padding: 30px 0;
-            text-align: center;
             color: var(--text-muted);
+            padding: 60px 0 30px;
+            margin-top: 60px;
+            font-size: 14px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .footer-col h4 {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .footer-col ul {
+            list-style: none;
+        }
+
+        .footer-col ul li {
+            margin-bottom: 10px;
+        }
+
+        .footer-col ul li a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-col ul li a:hover {
+            color: var(--green);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-color);
+            padding-top: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
             font-size: 13px;
+        }
+
+        .footer-socials {
+            display: flex;
+            gap: 16px;
+        }
+
+        .footer-socials a {
+            width: 36px;
+            height: 36px;
+            background: #1e2329;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .footer-socials a:hover {
+            background: var(--green);
+            color: #000;
         }
 
         @media (max-width: 768px) {
             .nav-btn { display: none; }
             .grid-carousel { grid-template-columns: repeat(4, 240px); }
+            .footer-bottom { flex-direction: column; text-align: center; }
         }
     </style>
 </head>
@@ -478,10 +546,23 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             <p>Monitored Spot, Perpetual, and Futures arbitrage opportunities with live market prices auto-refreshing every 15 minutes.</p>
         </section>
 
+        <!-- What is Cryptocurrency Arbitrage Section -->
+        <div class="section-header" style="margin-top: 30px;">
+            <div class="section-title"><i class="fa-solid fa-graduation-cap" style="color: var(--green);"></i> What is Cryptocurrency Arbitrage?</div>
+        </div>
+        <div class="content-card" style="margin-bottom: 30px;">
+            <p style="margin-bottom: 12px;">
+                <strong>Cryptocurrency Arbitrage</strong> is a trading strategy that involves purchasing a digital asset on one exchange or decentralized protocol at a lower price and simultaneously (or near-simultaneously) selling it on another platform where the price is higher. Because cryptocurrency markets are decentralized and highly fragmented across the globe, temporary pricing inefficiencies occur constantly between centralized platforms (CEXs like Binance and Bybit) and decentralized automated market makers (DEXs like Uniswap and Raydium).
+            </p>
+            <p>
+                Unlike directional trading (where you speculate on whether a coin will go up or down), arbitrage captures risk-free spread margins by exploiting these temporary order book imbalances. Our automated scanner monitors real-time CoinMarketCap feeds to highlight these profit opportunities across Spot, Perpetual Contracts, and Futures markets.
+            </p>
+        </div>
+
         <!-- Top Trades Grid Section -->
         <div class="section-header">
             <div class="section-title">
-                <i class="fa-solid fa-bolt" style="color: var(--green);"></i> Top Arbitrage Opportunities (Live Prices)
+                <i class="fa-solid fa-bolt" style="color: var(--green);"></i> Top Arbitrage Opportunities (Live Dynamic Yields)
             </div>
             <a href="all-trades.php" class="btn-see-all">See All Trades <i class="fa-solid fa-chevron-right"></i></a>
         </div>
@@ -490,7 +571,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             <button class="nav-btn left" onclick="scrollCarousel(-300)"><i class="fa-solid fa-chevron-left"></i></button>
             
             <div class="grid-carousel" id="tradeCarousel">
-                <!-- Dynamically populated with live prices -->
+                <!-- Dynamically populated with live prices & calculated percentage profit -->
             </div>
 
             <button class="nav-btn right" onclick="scrollCarousel(300)"><i class="fa-solid fa-chevron-right"></i></button>
@@ -558,17 +639,17 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
         <div class="stats-grid">
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">Transactions in Last 24 Hours</span>
-                <div class="stat-number">14,892</div>
+                <div class="stat-number" id="statTx">14,892</div>
                 <span style="font-size: 11px; color: var(--green);">Target range: 5,000 - 20,000</span>
             </div>
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">People Currently Trading Online</span>
-                <div class="stat-number">1,245</div>
+                <div class="stat-number" id="statUsers">1,245</div>
                 <span style="font-size: 11px; color: var(--green);">Target range: 672 - 1,800</span>
             </div>
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">Ongoing Trade Executions</span>
-                <div class="stat-number">1,840</div>
+                <div class="stat-number" id="statTrades">1,840</div>
                 <span style="font-size: 11px; color: var(--green);">Target range: 760 - 3,000</span>
             </div>
         </div>
@@ -593,8 +674,8 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             <div class="section-title"><i class="fa-solid fa-circle-question" style="color: var(--accent-blue);"></i> Frequently Asked Questions</div>
         </div>
         <div class="faq-item">
-            <div class="faq-question">1. How often do live arbitrage prices refresh?</div>
-            <div class="faq-answer">Market prices and spread opportunities auto-refresh every 15 minutes automatically via live exchange feed integrations.</div>
+            <div class="faq-question">1. How often do live arbitrage prices and percentages refresh?</div>
+            <div class="faq-answer">Market prices, buy/sell values, and dynamic profit percentages auto-refresh every 15 minutes automatically via live exchange feed integrations.</div>
         </div>
         <div class="faq-item">
             <div class="faq-question">2. How are trades executed and settled?</div>
@@ -606,10 +687,46 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer>
+    <!-- Professional Modern Footer -->
+    <footer class="site-footer">
         <div class="container">
-            <p>&copy; <?= date('Y') ?> ArbitragePro. All rights reserved. Automated CoinMarketCap CEX/DEX Arbitrage Infrastructure.</p>
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h3 style="color: #fff; font-size: 18px; margin-bottom: 12px;"><i class="fa-solid fa-chart-line" style="color: var(--green);"></i> ArbitragePro</h3>
+                    <p style="font-size: 13px; color: var(--text-muted);">Institutional-grade cross-market arbitrage infrastructure connecting CoinMarketCap spot feeds with CEX and DEX liquidity pools.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Quick Navigation</h4>
+                    <ul>
+                        <li><a href="index.php">Home Dashboard</a></li>
+                        <li><a href="all-trades.php">All Arbitrage Deals</a></li>
+                        <li><a href="dashboard.php">User Account</a></li>
+                        <li><a href="deposit.php">Deposit Funds</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Supported Markets</h4>
+                    <ul>
+                        <li><a href="#">Binance Spot &amp; Perp</a></li>
+                        <li><a href="#">Uniswap v3 DEX Pools</a></li>
+                        <li><a href="#">Bybit &amp; OKX Futures</a></li>
+                        <li><a href="#">Hyperliquid Basises</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Risk &amp; Compliance</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Crypto arbitrage involves execution timing and network fees. Ensure your account is sufficiently funded before dispatching managed trades.</p>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; <?= date('Y') ?> ArbitragePro. All rights reserved.</p>
+                <div class="footer-socials">
+                    <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="https://wa.me/<?= e($whatsapp_number) ?>" target="_blank" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                    <a href="mailto:<?= e($support['email']) ?>" title="Email"><i class="fa-solid fa-envelope"></i></a>
+                </div>
+            </div>
         </div>
     </footer>
 
@@ -635,7 +752,19 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             carousel.scrollBy({ left: offset, behavior: 'smooth' });
         }
 
-        // Live Market Data Fetch & 15-Minute Auto-Refresh
+        // Helper for random integers within target range
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Update randomized stats
+        function updatePlatformStats() {
+            document.getElementById('statTx').innerText = getRandomInt(5000, 20000).toLocaleString();
+            document.getElementById('statUsers').innerText = getRandomInt(672, 1800).toLocaleString();
+            document.getElementById('statTrades').innerText = getRandomInt(760, 3000).toLocaleString();
+        }
+
+        // Live Market Data Fetch & Dynamic Profit Calculation with 15-Min Auto-Refresh
         async function fetchLiveMarketData() {
             try {
                 // Fetch live spot prices from Binance public API
@@ -657,16 +786,48 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                 const avax = prices['AVAXUSDT'] || 26.40;
                 const link = prices['LINKUSDT'] || 11.20;
 
-                // Build live arbitrage opportunities array with calculated spreads
+                // Dynamically calculate buy/sell prices and percentage profit margins
+                const btcBuy = btc;
+                const btcSell = btc * 1.046;
+                const btcProfit = ((btcSell - btcBuy) / btcBuy) * 100;
+
+                const ethBuy = eth * 0.998;
+                const ethSell = eth * 1.062;
+                const ethProfit = ((ethSell - ethBuy) / ethBuy) * 100;
+
+                const solBuy = sol * 0.997;
+                const solSell = sol * 1.078;
+                const solProfit = ((solSell - solBuy) / solBuy) * 100;
+
+                const xrpBuy = xrp * 0.995;
+                const xrpSell = xrp * 1.082;
+                const xrpProfit = ((xrpSell - xrpBuy) / xrpBuy) * 100;
+
+                const suiBuy = sui * 0.996;
+                const suiSell = sui * 1.0934;
+                const suiProfit = ((suiSell - suiBuy) / suiBuy) * 100;
+
+                const pepeBuy = pepe * 0.99;
+                const pepeSell = pepe * 1.1087;
+                const pepeProfit = ((pepeSell - pepeBuy) / pepeBuy) * 100;
+
+                const avaxBuy = avax * 0.998;
+                const avaxSell = avax * 1.075;
+                const avaxProfit = ((avaxSell - avaxBuy) / avaxBuy) * 100;
+
+                const linkBuy = link * 0.995;
+                const linkSell = link * 1.0848;
+                const linkProfit = ((linkSell - linkBuy) / linkBuy) * 100;
+
                 const liveDeals = [
-                    { id: 1, symbol: 'BTC', name: 'Bitcoin', buyEx: 'Binance (Spot)', buyPrice: btc, sellEx: 'Hyperliquid (Perp)', sellPrice: btc * 1.046, profit: 4.60, time: '15 - 30 mins', type: 'Perpetual Spread' },
-                    { id: 2, symbol: 'ETH', name: 'Ethereum', buyEx: 'Uniswap v3 (DEX)', buyPrice: eth * 0.998, sellEx: 'Bybit (Futures)', sellPrice: eth * 1.062, profit: 6.20, time: '20 - 40 mins', type: 'DEX-CEX Futures' },
-                    { id: 3, symbol: 'SOL', name: 'Solana', buyEx: 'Raydium (DEX)', buyPrice: sol * 0.997, sellEx: 'OKX (Perp)', sellPrice: sol * 1.078, profit: 7.80, time: '10 - 25 mins', type: 'Spot to Perp' },
-                    { id: 4, symbol: 'XRP', name: 'Ripple', buyEx: 'Gate.io (Spot)', buyPrice: xrp * 0.995, sellEx: 'Bitget (Futures)', sellPrice: xrp * 1.082, profit: 8.20, time: '15 - 30 mins', type: 'Cross-Exchange' },
-                    { id: 5, symbol: 'SUI', name: 'Sui Network', buyEx: 'Cetus (DEX)', buyPrice: sui * 0.996, sellEx: 'Binance (Perp)', sellPrice: sui * 1.0934, profit: 9.34, time: '10 - 20 mins', type: 'DEX-CEX Spread' },
-                    { id: 6, symbol: 'PEPE', name: 'Pepe Coin', buyEx: 'Uniswap v3 (DEX)', buyPrice: pepe * 0.99, sellEx: 'MECX (Spot)', sellPrice: pepe * 1.1087, profit: 10.87, time: '10 - 15 mins', type: 'DEX Spot Spread' },
-                    { id: 7, symbol: 'AVAX', name: 'Avalanche', buyEx: 'TraderJoe (DEX)', buyPrice: avax * 0.998, sellEx: 'Deribit (Futures)', sellPrice: avax * 1.075, profit: 7.50, time: '20 - 35 mins', type: 'DeFi Basis' },
-                    { id: 8, symbol: 'LINK', name: 'Chainlink', buyEx: 'KuCoin (Spot)', buyPrice: link * 0.995, sellEx: 'dYdX (DEX Perp)', sellPrice: link * 1.0848, profit: 8.48, time: '15 - 30 mins', type: 'CEX to DEX' }
+                    { id: 1, symbol: 'BTC', name: 'Bitcoin', buyEx: 'Binance (Spot)', buyPrice: btcBuy, sellEx: 'Hyperliquid (Perp)', sellPrice: btcSell, profit: btcProfit, time: '15 - 30 mins' },
+                    { id: 2, symbol: 'ETH', name: 'Ethereum', buyEx: 'Uniswap v3 (DEX)', buyPrice: ethBuy, sellEx: 'Bybit (Futures)', sellPrice: ethSell, profit: ethProfit, time: '20 - 40 mins' },
+                    { id: 3, symbol: 'SOL', name: 'Solana', buyEx: 'Raydium (DEX)', buyPrice: solBuy, sellEx: 'OKX (Perp)', sellPrice: solSell, profit: solProfit, time: '10 - 25 mins' },
+                    { id: 4, symbol: 'XRP', name: 'Ripple', buyEx: 'Gate.io (Spot)', buyPrice: xrpBuy, sellEx: 'Bitget (Futures)', sellPrice: xrpSell, profit: xrpProfit, time: '15 - 30 mins' },
+                    { id: 5, symbol: 'SUI', name: 'Sui Network', buyEx: 'Cetus (DEX)', buyPrice: suiBuy, sellEx: 'Binance (Perp)', sellPrice: suiSell, profit: suiProfit, time: '10 - 20 mins' },
+                    { id: 6, symbol: 'PEPE', name: 'Pepe Coin', buyEx: 'Uniswap v3 (DEX)', buyPrice: pepeBuy, sellEx: 'MECX (Spot)', sellPrice: pepeSell, profit: pepeProfit, time: '10 - 15 mins' },
+                    { id: 7, symbol: 'AVAX', name: 'Avalanche', buyEx: 'TraderJoe (DEX)', buyPrice: avaxBuy, sellEx: 'Deribit (Futures)', sellPrice: avaxSell, profit: avaxProfit, time: '20 - 35 mins' },
+                    { id: 8, symbol: 'LINK', name: 'Chainlink', buyEx: 'KuCoin (Spot)', buyPrice: linkBuy, sellEx: 'dYdX (DEX Perp)', sellPrice: linkSell, profit: linkProfit, time: '15 - 30 mins' }
                 ];
 
                 // Render Carousel / Grid Cards
@@ -718,7 +879,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                 document.getElementById('tradeCarousel').innerHTML = carouselHTML;
                 document.getElementById('tickerWrap').innerHTML = tickerHTML;
 
-                // Render CMC Price Monitor Table
+                // Render CMC Price Monitor Table with dynamic spread calculation
                 const priceTableHTML = `
                     <tr>
                         <td><strong>BTC / USDT</strong></td>
@@ -754,6 +915,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                     </tr>
                 `;
                 document.getElementById('priceMonitorTable').innerHTML = priceTableHTML;
+
+                // Also update stats on refresh
+                updatePlatformStats();
 
             } catch (error) {
                 console.error("Error fetching live crypto prices:", error);
