@@ -1,5 +1,5 @@
 <?php
-// trade-results.php - Trade Status, Live Progress, and Outcome Page
+// trade-results.php - Trade Status & Auto-Completion Handler
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -22,54 +22,85 @@ function e($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-// Ensure user authentication
-if (!isset($_SESSION['user_id'])) {
+$is_logged_in = isset($_SESSION['user_id']);
+$user_id = $_SESSION['user_id'] ?? null;
+
+if (!$is_logged_in) {
     header("Location: login.php");
     exit();
 }
 
-$user_id = (int)$_SESSION['user_id'];
 $trade_id = isset($_GET['trade_id']) ? (int)$_GET['trade_id'] : 0;
+$trade = null;
 
-$single_trade = null;
-$user_trades = [];
+if ($pdo && $trade_id > 0) {
+    try {
+        // Fetch trade record ensuring it belongs to the logged-in user
+        $stmtTrade = $pdo->prepare("SELECT * FROM user_trades WHERE id = ? AND user_id = ?");
+        $stmtTrade->execute([$trade_id, $user_id]);
+        $trade = $stmtTrade->fetch(PDO::FETCH_ASSOC);
 
-if ($trade_id > 0) {
-    // Fetch specific trade detail
-    $stmt = $pdo->prepare("
-        SELECT ut.*, ad.symbol, ad.coin_name, ad.buy_exchange, ad.sell_exchange, ad.buy_price, ad.sell_price, ad.estimated_time
-        FROM user_trades ut
-        INNER JOIN arbitrage_deals ad ON ut.deal_id = ad.id
-        WHERE ut.id = ? AND ut.user_id = ?
-    ");
-    $stmt->execute([$trade_id, $user_id]);
-    $single_trade = $stmt->fetch();
+        // Check if trade is pending and has reached its expiration time
+        if ($trade && ($trade['status'] === 'pending' || $trade['status'] === 'active')) {
+            $now = time();
+            $expires_at = strtotime($trade['expires_at'] ?? 'now');
+
+            // If expiration time has passed, auto-complete the trade
+            if ($now >= $expires_at) {
+                $pdo->beginTransaction();
+
+                // 1. Update trade status to completed/won
+                $updateTrade = $pdo->prepare("UPDATE user_trades SET status = 'completed' WHERE id = ?");
+                $updateTrade->execute([$trade_id]);
+
+                // 2. Calculate return (Principal + Profit)
+                $total_return = (float)$trade['amount'] + (float)$trade['potential_profit'];
+
+                // 3. Credit user balance
+                if ($trade['account_type'] === 'demo') {
+                    $updateBal = $pdo->prepare("UPDATE users SET demo_balance = demo_balance + ? WHERE id = ?");
+                } else {
+                    $updateBal = $pdo->prepare("UPDATE users SET real_balance = real_balance + ? WHERE id = ?");
+                }
+                $updateBal->execute([$total_return, $user_id]);
+
+                $pdo->commit();
+
+                // Refresh trade record data after update
+                $stmtTrade->execute([$trade_id, $user_id]);
+                $trade = $stmtTrade->fetch(PDO::FETCH_ASSOC);
+            }
+        }
+    } catch (Exception $e) {
+        if ($pdo && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
 }
 
-// Fetch all trades for current user
-$stmtAll = $pdo->prepare("
-    SELECT ut.*, ad.symbol, ad.coin_name, ad.buy_exchange, ad.sell_exchange
-    FROM user_trades ut
-    INNER JOIN arbitrage_deals ad ON ut.deal_id = ad.id
-    WHERE ut.user_id = ?
-    ORDER BY ut.id DESC
-");
-$stmtAll->execute([$user_id]);
-$user_trades = $stmtAll->fetchAll();
+// Fetch user data for balance display
+$stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmtUser->execute([$user_id]);
+$user = $stmtUser->fetch(PDO::FETCH_ASSOC);
 
-// Support details
-$support = ['phone' => '+1 (800) 123-4567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
-$stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
-if ($dbSup = $stmtSup->fetch()) {
-    $support = $dbSup;
+// Support info
+$support = ['phone' => '+18001234567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
+if ($pdo) {
+    try {
+        $stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
+        if ($dbSup = $stmtSup->fetch(PDO::FETCH_ASSOC)) {
+            $support = $dbSup;
+        }
+    } catch (Exception $e) {}
 }
+$whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trade Results & Analytics | ArbitragePro</title>
+    <title>Trade Execution Results | ArbitragePro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -96,349 +127,230 @@ if ($dbSup = $stmtSup->fetch()) {
         }
 
         .container {
-            width: min(1100px, calc(100% - 32px));
-            margin: 32px auto;
+            width: min(800px, calc(100% - 32px));
+            margin: 40px auto;
         }
 
-        .page-title {
-            font-size: 26px;
-            font-weight: 800;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        /* Detailed Card Styles */
-        .detail-card {
+        .result-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 28px;
-            margin-bottom: 32px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        }
-
-        .status-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 24px;
-        }
-
-        .badge-status {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .status-pending { background: rgba(255, 193, 7, 0.15); color: var(--warning); border: 1px solid var(--warning); }
-        .status-in_progress { background: rgba(43, 108, 176, 0.2); color: #63b3ed; border: 1px solid #63b3ed; }
-        .status-completed { background: rgba(14, 203, 129, 0.15); color: var(--green); border: 1px solid var(--green); }
-        .status-cancelled { background: rgba(246, 70, 93, 0.15); color: var(--red); border: 1px solid var(--red); }
-
-        /* Multi-step Visual Progress Tracker */
-        .progress-tracker {
-            display: flex;
-            justify-content: space-between;
-            position: relative;
-            margin: 30px 0 40px;
-        }
-
-        .progress-tracker::before {
-            content: '';
-            position: absolute;
-            top: 18px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--border-color);
-            z-index: 1;
-        }
-
-        .step-item {
-            position: relative;
-            z-index: 2;
+            padding: 32px;
             text-align: center;
-            flex: 1;
         }
 
-        .step-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 50%;
-            background: #1e2329;
-            border: 2px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 10px;
+        .status-icon {
+            font-size: 54px;
+            margin-bottom: 16px;
+        }
+        .status-icon.pending { color: var(--warning); }
+        .status-icon.completed, .status-icon.won { color: var(--green); }
+        .status-icon.lost { color: var(--red); }
+
+        .status-title {
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .status-subtitle {
+            color: var(--text-muted);
             font-size: 14px;
-            color: var(--text-muted);
+            margin-bottom: 28px;
         }
 
-        .step-item.active .step-icon {
-            background: var(--green);
-            border-color: var(--green);
-            color: #000;
-        }
-
-        .step-item.current .step-icon {
-            background: var(--accent-blue);
-            border-color: #63b3ed;
-            color: #fff;
-            box-shadow: 0 0 12px rgba(99, 179, 237, 0.6);
-        }
-
-        .step-label {
-            font-size: 12px;
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .step-item.active .step-label { color: var(--text-main); }
-
-        /* Key Metric Grid */
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+        .details-grid {
             background: #1e2329;
             border-radius: 8px;
             padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .metric-box label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-        .metric-box span { font-size: 18px; font-weight: 700; }
-
-        /* Admin Note Box */
-        .admin-note-box {
-            background: rgba(43, 108, 176, 0.1);
-            border-left: 4px solid var(--accent-blue);
-            padding: 16px;
-            border-radius: 0 8px 8px 0;
-            margin-top: 20px;
-        }
-
-        .admin-note-box h5 { color: #63b3ed; font-size: 14px; margin-bottom: 6px; }
-        .admin-note-box p { font-size: 14px; color: var(--text-main); }
-
-        /* History Table */
-        .table-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-            overflow-x: auto;
-        }
-
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
             text-align: left;
+            margin-bottom: 28px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
             font-size: 14px;
         }
+        .detail-row:last-child { margin-bottom: 0; }
+        .detail-row span { color: var(--text-muted); }
+        .detail-row strong { color: #fff; }
 
-        .history-table th {
-            padding: 12px;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-color);
+        .timer-box {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 28px;
+            font-size: 15px;
+            color: #ffe066;
             font-weight: 600;
         }
 
-        .history-table td {
-            padding: 14px 12px;
-            border-bottom: 1px solid var(--border-color);
+        .action-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
         }
 
-        .history-table tr:last-child td { border-bottom: none; }
-        .history-table tr:hover { background: var(--bg-hover); }
-
-        .btn-view {
-            color: var(--accent-blue);
+        .btn-main {
+            background: var(--green);
+            color: #000;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 6px;
             text-decoration: none;
-            font-weight: 600;
+            transition: opacity 0.2s;
         }
+        .btn-main:hover { opacity: 0.9; }
 
-        .btn-view:hover { text-decoration: underline; }
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover { background: var(--bg-hover); }
 
-        /* Support Floating Widget */
         .floating-support { position: fixed; bottom: 20px; right: 20px; z-index: 99; display: flex; flex-direction: column; gap: 10px; }
         .support-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-        .sup-telegram { background: #0088cc; } .sup-phone { background: #25d366; } .sup-email { background: var(--accent-blue); }
-
-        @media (max-width: 768px) {
-            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-            .progress-tracker { flex-direction: column; gap: 16px; }
-            .progress-tracker::before { display: none; }
-            .step-item { display: flex; align-items: center; gap: 12px; text-align: left; }
-            .step-icon { margin: 0; }
-        }
+        .sup-telegram { background: #0088cc; } .sup-whatsapp { background: #25d366; } .sup-email { background: var(--accent-blue); }
     </style>
 </head>
 <body>
 
-    <?php include 'inc/navbar.php'; ?>
+    <?php if (file_exists('inc/navbar.php')) include 'inc/navbar.php'; ?>
 
     <main class="container">
-        
-        <?php if ($single_trade): ?>
-            <!-- Single Selected Trade Detailed Status Card -->
-            <div class="page-title">
-                <i class="fa-solid fa-square-poll-vertical" style="color: var(--green);"></i> 
-                Trade Details #TRD-<?= (int)$single_trade['id'] ?>
-            </div>
+        <div class="result-card">
+            <?php if (!$trade): ?>
+                <div class="status-icon lost"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <h1 class="status-title">Trade Not Found</h1>
+                <p class="status-subtitle">The requested trade record does not exist or you do not have permission to view it.</p>
+                <a href="index.php" class="btn-main">Return to Dashboard</a>
+            <?php else: ?>
+                <?php 
+                    $is_completed = ($trade['status'] === 'completed' || $trade['status'] === 'won');
+                    $is_lost = ($trade['status'] === 'lost');
+                    $status_class = $is_completed ? 'completed' : ($is_lost ? 'lost' : 'pending');
+                ?>
 
-            <div class="detail-card">
-                <div class="status-header">
-                    <div>
-                        <h3 style="font-size: 22px; font-weight: 700;">
-                            <?= e($single_trade['coin_name']) ?> (<?= e($single_trade['symbol']) ?>/USDT)
-                        </h3>
-                        <span style="font-size: 13px; color: var(--text-muted);">
-                            Executed via <?= e(strtoupper($single_trade['account_type'])) ?> Account • Started: <?= e(date('M d, Y - H:i', strtotime($single_trade['started_at']))) ?>
-                        </span>
-                    </div>
-
-                    <span class="badge-status status-<?= e($single_trade['status']) ?>">
-                        <?= e(str_replace('_', ' ', $single_trade['status'])) ?>
-                    </span>
+                <div class="status-icon <?= $status_class ?>">
+                    <?php if ($is_completed): ?>
+                        <i class="fa-solid fa-circle-check"></i>
+                    <?php elseif ($is_lost): ?>
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    <?php else: ?>
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    <?php endif; ?>
                 </div>
 
-                <!-- Multi-step Visual Progress Tracker -->
-                <div class="progress-tracker">
-                    <?php
-                    $status = $single_trade['status'];
-                    $s1 = ($status == 'pending' || $status == 'in_progress' || $status == 'completed') ? 'active' : '';
-                    $s2 = ($status == 'in_progress' || $status == 'completed') ? 'active' : (($status == 'pending') ? 'current' : '');
-                    $s3 = ($status == 'in_progress') ? 'current' : (($status == 'completed') ? 'active' : '');
-                    $s4 = ($status == 'completed') ? 'active' : '';
-                    ?>
-                    <div class="step-item <?= $s1 ?>">
-                        <div class="step-icon"><i class="fa-solid fa-check"></i></div>
-                        <div class="step-label">Signal Selected</div>
-                    </div>
-                    <div class="step-item <?= $s2 ?>">
-                        <div class="step-icon"><i class="fa-solid fa-building-columns"></i></div>
-                        <div class="step-label">Capital Allocated</div>
-                    </div>
-                    <div class="step-item <?= $s3 ?>">
-                        <div class="step-icon"><i class="fa-solid fa-arrows-rotate fa-spin"></i></div>
-                        <div class="step-label">Cross-Exchange Execution</div>
-                    </div>
-                    <div class="step-item <?= $s4 ?>">
-                        <div class="step-icon"><i class="fa-solid fa-flag-checkered"></i></div>
-                        <div class="step-label">Profits Settled</div>
-                    </div>
-                </div>
+                <h1 class="status-title">
+                    <?php if ($is_completed): ?>
+                        Trade Successfully Completed
+                    <?php elseif ($is_lost): ?>
+                        Trade Unsuccessful
+                    <?php else: ?>
+                        Arbitrage Trade in Progress
+                    <?php endif; ?>
+                </h1>
+                
+                <p class="status-subtitle">
+                    <?php if ($is_completed): ?>
+                        Arbitrage spread captured successfully. Principal and profits have been credited to your <?= ucfirst($trade['account_type']) ?> balance.
+                    <?php elseif ($is_lost): ?>
+                        Trade execution encountered network congestion or slippage limit.
+                    <?php else: ?>
+                        Our automated routing system is executing your cross-exchange arbitrage trade.
+                    <?php endif; ?>
+                </p>
 
-                <!-- Metrics Grid -->
-                <div class="metrics-grid">
-                    <div class="metric-box">
-                        <label>Investment Amount</label>
-                        <span>$<?= number_format($single_trade['amount'], 2) ?></span>
-                    </div>
-                    <div class="metric-box">
-                        <label>Target Spread</label>
-                        <span style="color: var(--green);">+<?= e($single_trade['profit_percentage']) ?>%</span>
-                    </div>
-                    <div class="metric-box">
-                        <label>Expected Profit</label>
-                        <span style="color: var(--green);">+$<?= number_format($single_trade['potential_profit'], 2) ?></span>
-                    </div>
-                    <div class="metric-box">
-                        <label>Realized Net Return</label>
-                        <?php if ($single_trade['status'] === 'completed'): ?>
-                            <span style="color: var(--green);">$<?= number_format($single_trade['amount'] + $single_trade['realized_profit'], 2) ?></span>
-                        <?php else: ?>
-                            <span style="color: var(--warning);">Pending...</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <div style="font-size: 14px; color: var(--text-muted); display: flex; gap: 20px;">
-                    <span><strong>Buy Exchange:</strong> <?= e($single_trade['buy_exchange']) ?> ($<?= number_format($single_trade['buy_price'], 2) ?>)</span>
-                    <span><strong>Sell Exchange:</strong> <?= e($single_trade['sell_exchange']) ?> ($<?= number_format($single_trade['sell_price'], 2) ?>)</span>
-                </div>
-
-                <!-- Admin Remarks/Comments -->
-                <?php if (!empty($single_trade['admin_comment'])): ?>
-                    <div class="admin-note-box">
-                        <h5><i class="fa-solid fa-comment-dots"></i> Operations Manager Note</h5>
-                        <p><?= e($single_trade['admin_comment']) ?></p>
+                <?php if (!$is_completed && !$is_lost): ?>
+                    <div class="timer-box" id="timerBox">
+                        <i class="fa-regular fa-clock"></i> Estimated Completion Time: <span id="countdown">Calculating...</span>
                     </div>
                 <?php endif; ?>
-            </div>
-        <?php endif; ?>
 
-        <!-- Trade History Table -->
-        <div class="page-title">
-            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-blue);"></i> Trade History & Results
-        </div>
+                <div class="details-grid">
+                    <div class="detail-row">
+                        <span>Trade ID:</span>
+                        <strong>#<?= (int)$trade['id'] ?></strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Account Type:</span>
+                        <strong><?= ucfirst($trade['account_type']) ?> Account</strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Invested Amount:</span>
+                        <strong>$<?= number_format((float)$trade['amount'], 2) ?> USDT</strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Profit Margin Spread:</span>
+                        <strong style="color: var(--green);">+<?= number_format((float)$trade['profit_percentage'], 2) ?>%</strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Potential / Realized Profit:</span>
+                        <strong style="color: var(--green);">+$<?= number_format((float)$trade['potential_profit'], 2) ?> USDT</strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Total Return:</span>
+                        <strong>$<?= number_format((float)$trade['amount'] + (float)$trade['potential_profit'], 2) ?> USDT</strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Status:</span>
+                        <strong style="text-transform: uppercase; color: <?= $is_completed ? 'var(--green)' : ($is_lost ? 'var(--red)' : 'var(--warning)') ?>;">
+                            <?= e($trade['status']) ?>
+                        </strong>
+                    </div>
+                    <div class="detail-row">
+                        <span>Expires At:</span>
+                        <strong><?= e($trade['expires_at']) ?></strong>
+                    </div>
+                </div>
 
-        <div class="table-card">
-            <?php if (!empty($user_trades)): ?>
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Trade ID</th>
-                            <th>Pair</th>
-                            <th>Account</th>
-                            <th>Amount</th>
-                            <th>Spread</th>
-                            <th>Target Profit</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($user_trades as $t): ?>
-                            <tr>
-                                <td><strong>#TRD-<?= (int)$t['id'] ?></strong></td>
-                                <td><?= e($t['symbol']) ?>/USDT</td>
-                                <td><span style="text-transform: uppercase; font-size: 12px; color: var(--text-muted);"><?= e($t['account_type']) ?></span></td>
-                                <td>$<?= number_format($t['amount'], 2) ?></td>
-                                <td style="color: var(--green);">+<?= e($t['profit_percentage']) ?>%</td>
-                                <td style="color: var(--green);">+$<?= number_format($t['potential_profit'], 2) ?></td>
-                                <td>
-                                    <span class="badge-status status-<?= e($t['status']) ?>" style="font-size: 11px; padding: 4px 10px;">
-                                        <?= e(str_replace('_', ' ', $t['status'])) ?>
-                                    </span>
-                                </td>
-                                <td style="color: var(--text-muted); font-size: 13px;"><?= e(date('M d, H:i', strtotime($t['started_at']))) ?></td>
-                                <td><a href="trade-results.php?trade_id=<?= (int)$t['id'] ?>" class="btn-view">Details <i class="fa-solid fa-angle-right"></i></a></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php else: ?>
-                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    <i class="fa-solid fa-chart-line" style="font-size: 38px; margin-bottom: 12px;"></i>
-                    <p>No trade executions recorded yet. Visit the <a href="index.php" style="color: var(--green);">home page</a> to launch your first arbitrage trade.</p>
+                <div class="action-buttons">
+                    <a href="index.php" class="btn-main"><i class="fa-solid fa-bolt"></i> Explore More Trades</a>
+                    <a href="dashboard.php" class="btn-secondary"><i class="fa-solid fa-wallet"></i> View Account Balance</a>
                 </div>
             <?php endif; ?>
         </div>
-
     </main>
 
-    <!-- Floating Support Bar -->
     <div class="floating-support">
-        <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support">
-            <i class="fa-brands fa-telegram"></i>
-        </a>
-        <a href="tel:<?= e($support['phone']) ?>" class="support-btn sup-phone" title="Phone Support">
-            <i class="fa-solid fa-phone"></i>
-        </a>
-        <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support">
-            <i class="fa-solid fa-envelope"></i>
-        </a>
+        <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support"><i class="fa-brands fa-telegram"></i></a>
+        <a href="https://wa.me/<?= e($whatsapp_number) ?>?text=Hello%20Support%20regarding%20Trade%20ID%20<?= $trade_id ?>" target="_blank" class="support-btn sup-whatsapp" title="WhatsApp Support"><i class="fa-brands fa-whatsapp"></i></a>
+        <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support"><i class="fa-solid fa-envelope"></i></a>
     </div>
 
+    <?php if ($trade && !$is_completed && !$is_lost): ?>
+    <script>
+        // Countdown timer for pending trades
+        const expiresAt = new Date("<?= $trade['expires_at'] ?>").getTime();
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const distance = expiresAt - now;
+
+            if (distance < 0) {
+                document.getElementById("countdown").innerText = "Completing trade...";
+                setTimeout(() => { location.reload(); }, 1500); // Auto-reload to trigger PHP completion handler
+                return;
+            }
+
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            document.getElementById("countdown").innerText = minutes + "m " + seconds + "s remaining";
+        }
+
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+    </script>
+    <?php endif; ?>
 </body>
 </html>
