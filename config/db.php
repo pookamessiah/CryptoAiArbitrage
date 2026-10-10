@@ -2,7 +2,7 @@
 // config/db.php - Database Connection Configuration
 class Database {
     private $host = "sql201.infinityfree.com"; // Replace with your InfinityFree MySQL Hostname
-    private $db_name = "if0_43132881_XXX"; // Replace with your InfinityFree DB Name
+    private $db_name = "if0_43132881_Arbitrage"; // Replace with your InfinityFree DB Name
     private $username = "if0_43132881";          // Replace with your InfinityFree DB Username
     private $password = "tcaAmxPccHqx3";        // Replace with your InfinityFree DB Password
     private $conn = null;
