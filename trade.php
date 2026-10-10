@@ -1,5 +1,5 @@
 <?php
-// trade.php - Trade Execution Page with Full Parameter Passing & Live Refreshes
+// trade.php - Trade Execution Page with Live Binance API Prices & 15-Min Auto-Refresh
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -22,6 +22,7 @@ function e($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+// Check Authentication
 $is_logged_in = isset($_SESSION['user_id']);
 $user_id = $_SESSION['user_id'] ?? null;
 $user = null;
@@ -32,16 +33,33 @@ if ($is_logged_in) {
     $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
 }
 
-// Capture parameters passed from index.php or all-trades.php
-$symbol = isset($_GET['symbol']) ? strtoupper(trim($_GET['symbol'])) : 'BTC';
-$coin_name = isset($_GET['name']) ? trim($_GET['name']) : 'Bitcoin';
-$buy_exchange = isset($_GET['buy_ex']) ? trim($_GET['buy_ex']) : 'Binance (Spot)';
-$sell_exchange = isset($_GET['sell_ex']) ? trim($_GET['sell_ex']) : 'Hyperliquid (Perp)';
-$estimated_time = isset($_GET['time']) ? trim($_GET['time']) : '15 - 30 mins';
+// Retrieve Selected Deal ID from URL
+$deal_id = isset($_GET['id']) ? (int)$_GET['id'] : 1;
+$deal = null;
+
+if ($pdo) {
+    try {
+        $stmtDeal = $pdo->prepare("SELECT * FROM arbitrage_deals WHERE id = ?");
+        $stmtDeal->execute([$deal_id]);
+        $deal = $stmtDeal->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {}
+}
+
+// Fallback dataset if database deal ID doesn't exist yet
+if (!$deal) {
+    $fallback_deals = [
+        1 => ['id' => 1, 'symbol' => 'BTC', 'coin_name' => 'Bitcoin', 'buy_exchange' => 'Binance (Spot)', 'sell_exchange' => 'Hyperliquid (Perp)', 'estimated_time' => '15 - 30 mins'],
+        2 => ['id' => 2, 'symbol' => 'ETH', 'coin_name' => 'Ethereum', 'buy_exchange' => 'Uniswap v3 (DEX)', 'sell_exchange' => 'Bybit (Futures)', 'estimated_time' => '20 - 40 mins'],
+        3 => ['id' => 3, 'symbol' => 'SOL', 'coin_name' => 'Solana', 'buy_exchange' => 'Raydium (DEX)', 'sell_exchange' => 'OKX (Perp)', 'estimated_time' => '10 - 25 mins'],
+        4 => ['id' => 4, 'symbol' => 'XRP', 'coin_name' => 'Ripple', 'buy_exchange' => 'Gate.io (Spot)', 'sell_exchange' => 'Bitget (Futures)', 'estimated_time' => '15 - 30 mins'],
+        5 => ['id' => 5, 'symbol' => 'SUI', 'coin_name' => 'Sui Network', 'buy_exchange' => 'Cetus (DEX)', 'sell_exchange' => 'Binance (Perp)', 'estimated_time' => '10 - 20 mins']
+    ];
+    $deal = $fallback_deals[$deal_id] ?? $fallback_deals[1];
+}
 
 $error_message = "";
 
-// Handle Trade Execution Form
+// Handle Trade Execution Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execute_trade'])) {
     if (!$is_logged_in) {
         $error_message = "You must be logged in to execute a trade.";
@@ -72,11 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execute_trade'])) {
                     $updateStmt->execute([$amount, $user_id]);
 
                     $insertStmt = $pdo->prepare("
-                        INSERT INTO user_trades (user_id, account_type, amount, profit_percentage, potential_profit, status, expires_at)
-                        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                        INSERT INTO user_trades (user_id, deal_id, account_type, amount, profit_percentage, potential_profit, status, expires_at)
+                        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
                     ");
                     $insertStmt->execute([
                         $user_id,
+                        $deal['id'],
                         $account_type,
                         $amount,
                         $profit_percentage,
@@ -99,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['execute_trade'])) {
     }
 }
 
+// Support contacts
 $support = ['phone' => '+18001234567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
 if ($pdo) {
     try {
@@ -115,7 +135,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Execute Arbitrage Trade | <?= e($coin_name) ?> (<?= e($symbol) ?>)</title>
+    <title>Execute Arbitrage Trade | <?= e($deal['coin_name']) ?> (<?= e($deal['symbol']) ?>)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -288,13 +308,13 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
     <?php if (file_exists('inc/navbar.php')) include 'inc/navbar.php'; ?>
 
     <main class="container">
-        <a href="all-trades.php" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Market Opportunities</a>
+        <a href="index.php" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Market Opportunities</a>
 
         <div class="trade-box">
             <div class="deal-header">
                 <div class="deal-title">
-                    <h2><?= e($coin_name) ?> Arbitrage Trade</h2>
-                    <span>Pair: <?= e($symbol) ?> / USDT</span>
+                    <h2><?= e($deal['coin_name']) ?> Arbitrage Trade</h2>
+                    <span>Pair: <?= e($deal['symbol']) ?> / USDT</span>
                 </div>
                 <div class="profit-badge" id="profitBadgeHeading">+0.00% Yield</div>
             </div>
@@ -302,13 +322,13 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             <!-- Route Summary -->
             <div class="route-grid">
                 <div class="route-item">
-                    <p><i class="fa-solid fa-cart-shopping"></i> Buy Exchange (<?= e($buy_exchange) ?>)</p>
-                    <h3 id="buyExName"><?= e($buy_exchange) ?></h3>
+                    <p><i class="fa-solid fa-cart-shopping"></i> Buy Exchange (<?= e($deal['buy_exchange'] ?? 'Binance (Spot)') ?>)</p>
+                    <h3><?= e($deal['buy_exchange'] ?? 'Binance (Spot)') ?></h3>
                     <span id="buyExPrice">$0.00</span>
                 </div>
                 <div class="route-item">
-                    <p><i class="fa-solid fa-tags"></i> Sell Exchange (<?= e($sell_exchange) ?>)</p>
-                    <h3 id="sellExName"><?= e($sell_exchange) ?></h3>
+                    <p><i class="fa-solid fa-tags"></i> Sell Exchange (<?= e($deal['sell_exchange'] ?? 'Hyperliquid (Perp)') ?>)</p>
+                    <h3><?= e($deal['sell_exchange'] ?? 'Hyperliquid (Perp)') ?></h3>
                     <span id="sellExPrice" style="color: var(--green);">$0.00</span>
                 </div>
             </div>
@@ -325,11 +345,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             <?php else: ?>
 
                 <form method="POST" action="">
-                    <input type="hidden" name="coin_symbol" value="<?= e($symbol) ?>">
-                    <input type="hidden" name="buy_exchange" value="<?= e($buy_exchange) ?>">
-                    <input type="hidden" name="sell_exchange" value="<?= e($sell_exchange) ?>">
                     <input type="hidden" name="profit_percentage" id="inputProfitPct" value="0">
-                    <input type="hidden" name="estimated_time" value="<?= e($estimated_time) ?>">
 
                     <!-- Account Type Selector -->
                     <div class="form-group">
@@ -354,7 +370,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                     <div class="summary-card">
                         <div class="summary-row">
                             <span>Estimated Duration:</span>
-                            <strong><i class="fa-regular fa-clock"></i> <?= e($estimated_time) ?></strong>
+                            <strong><i class="fa-regular fa-clock"></i> <?= e($deal['estimated_time'] ?? '15 - 30 mins') ?></strong>
                         </div>
                         <div class="summary-row">
                             <span>Target Arbitrage Spread:</span>
@@ -388,9 +404,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
     <script>
         const realBalance = <?= (float)($user['real_balance'] ?? 0) ?>;
         const demoBalance = <?= (float)($user['demo_balance'] ?? 0) ?>;
-        const targetSymbol = "<?= e($symbol) ?>";
+        const targetSymbol = "<?= e($deal['symbol'] ?? 'BTC') ?>";
 
-        let activeProfitMargin = 5.0;
+        let activeProfitMargin = 4.60;
 
         function updateBalanceDisplay() {
             const type = document.getElementById('account_type').value;
@@ -427,8 +443,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                 data.forEach(item => { prices[item.symbol] = parseFloat(item.price); });
 
                 const basePrice = prices[targetSymbol + 'USDT'] || 64200.00;
-                const buyP = basePrice * 0.998;
-                const sellP = basePrice * 1.052;
+                const buyP = basePrice;
+                const sellP = basePrice * 1.046; // Matches index.php live spread calculation
+                
                 activeProfitMargin = ((sellP - buyP) / buyP) * 100;
 
                 document.getElementById('buyExPrice').innerText = '$' + buyP.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
@@ -445,7 +462,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchLiveTradePricing();
-            setInterval(fetchLiveTradePricing, 15 * 60 * 1000); // 15 mins
+            setInterval(fetchLiveTradePricing, 15 * 60 * 1000); // Auto-refresh every 15 mins
         });
     </script>
 </body>
