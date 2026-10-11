@@ -1,5 +1,5 @@
 <?php
-// dashboard.php - User Account Overview Dashboard
+// dashboard.php - User Account Overview Dashboard with Admin Messaging
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -30,10 +30,24 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
+// Handle Mark Message as Read action
+if (isset($_GET['mark_read'])) {
+    $msg_id = (int)$_GET['mark_read'];
+    $stmtRead = $pdo->prepare("UPDATE user_messages SET is_read = 1 WHERE id = ? AND user_id = ?");
+    $stmtRead->execute([$msg_id, $user_id]);
+    header("Location: dashboard.php");
+    exit();
+}
+
 // Fetch User Info
 $stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmtUser->execute([$user_id]);
 $user = $stmtUser->fetch();
+
+// Fetch Admin Direct Messages / Notifications
+$stmtMsgs = $pdo->prepare("SELECT * FROM user_messages WHERE user_id = ? ORDER BY id DESC");
+$stmtMsgs->execute([$user_id]);
+$messages = $stmtMsgs->fetchAll();
 
 // Calculate User Stats
 $stmtStats = $pdo->prepare("
@@ -83,6 +97,7 @@ if ($dbSup = $stmtSup->fetch()) {
             --text-muted: #848e9c;
             --green: #0ecb81;
             --red: #f6465d;
+            --warning: #ffc107;
             --accent-blue: #2b6cb0;
             --border-color: #2b313a;
         }
@@ -136,6 +151,22 @@ if ($dbSup = $stmtSup->fetch()) {
 
         .btn-deposit { background: var(--green); color: #000; }
         .btn-withdraw { background: #1e2329; border: 1px solid var(--border-color); color: #fff; }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+        /* Admin Notifications Box */
+        .msg-box {
+            background: rgba(43, 108, 176, 0.15);
+            border: 1px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .msg-box.unread { border-left: 4px solid var(--warning); background: rgba(255, 193, 7, 0.08); border-color: rgba(255, 193, 7, 0.3); }
+        .msg-content p { font-size: 14px; color: #fff; }
+        .msg-content span { font-size: 11px; color: var(--text-muted); }
 
         /* Stats Cards */
         .stats-grid {
@@ -173,6 +204,7 @@ if ($dbSup = $stmtSup->fetch()) {
             border-radius: 12px;
             padding: 24px;
             overflow-x: auto;
+            margin-bottom: 32px;
         }
 
         .section-header {
@@ -237,6 +269,30 @@ if ($dbSup = $stmtSup->fetch()) {
                 <a href="withdraw.php" class="btn-action btn-withdraw"><i class="fa-solid fa-money-bill-transfer"></i> Withdraw</a>
             </div>
         </div>
+
+        <!-- Admin Direct Messages / Notifications Section -->
+        <?php if (!empty($messages)): ?>
+        <div class="section-box">
+            <div class="section-header" style="margin-bottom: 16px;">
+                <h3><i class="fa-solid fa-bell" style="color: var(--warning);"></i> Admin Notifications & Messages</h3>
+            </div>
+            <div>
+                <?php foreach ($messages as $m): ?>
+                    <div class="msg-box <?= $m['is_read'] == 0 ? 'unread' : '' ?>">
+                        <div class="msg-content">
+                            <p><i class="fa-solid fa-bullhorn" style="color: var(--accent-blue); margin-right: 6px;"></i> <?= e($m['message']) ?></p>
+                            <span>Received on: <?= e($m['created_at']) ?></span>
+                        </div>
+                        <?php if ($m['is_read'] == 0): ?>
+                            <a href="dashboard.php?mark_read=<?= $m['id'] ?>" class="btn-action btn-deposit btn-sm" style="background: var(--accent-blue); color: #fff;">Mark Read</a>
+                        <?php else: ?>
+                            <span style="font-size: 12px; color: var(--green);"><i class="fa-solid fa-check"></i> Read</span>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Key Metrics -->
         <div class="stats-grid">
