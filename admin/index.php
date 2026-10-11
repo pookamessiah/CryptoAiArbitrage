@@ -53,10 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_support'])) {
         $stmtSup->execute([$phone, $telegram, $email]);
     }
     $alert_message = "Support contact info updated successfully!";
-    $alert_type = "success";
 }
 
-// 2. Handle User Info Updates (Edit Balances / Status)
+// 2. Handle User Info Updates (Edit Balances, Status, & Password)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_user'])) {
     $target_user_id = (int)$_POST['user_id'];
     $fullname = trim($_POST['fullname']);
@@ -64,21 +63,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_user'])) {
     $real_balance = filter_var($_POST['real_balance'], FILTER_VALIDATE_FLOAT);
     $demo_balance = filter_var($_POST['demo_balance'], FILTER_VALIDATE_FLOAT);
     $status = $_POST['status'];
+    $new_password = trim($_POST['new_password'] ?? '');
 
-    $stmtUpdateU = $pdo->prepare("
-        UPDATE users SET fullname = ?, email = ?, real_balance = ?, demo_balance = ?, status = ? WHERE id = ?
-    ");
-    if ($stmtUpdateU->execute([$fullname, $email, $real_balance, $demo_balance, $status, $target_user_id])) {
-        $alert_message = "User #{$target_user_id} updated successfully!";
-        $alert_type = "success";
+    if (!empty($new_password)) {
+        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+        $stmtUpdateU = $pdo->prepare("
+            UPDATE users SET fullname = ?, email = ?, real_balance = ?, demo_balance = ?, status = ?, password = ? WHERE id = ?
+        ");
+        $stmtUpdateU->execute([$fullname, $email, $real_balance, $demo_balance, $status, $hashed_password, $target_user_id]);
+    } else {
+        $stmtUpdateU = $pdo->prepare("
+            UPDATE users SET fullname = ?, email = ?, real_balance = ?, demo_balance = ?, status = ? WHERE id = ?
+        ");
+        $stmtUpdateU->execute([$fullname, $email, $real_balance, $demo_balance, $status, $target_user_id]);
+    }
+    $alert_message = "User #{$target_user_id} profile & balances updated successfully!";
+}
+
+// 3. Handle Direct Dashboard Message to User
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_user_message'])) {
+    $target_user_id = (int)$_POST['user_id'];
+    $message_text = trim($_POST['message_text']);
+
+    if (!empty($message_text)) {
+        try {
+            $stmtMsg = $pdo->prepare("INSERT INTO user_messages (user_id, message) VALUES (?, ?)");
+            $stmtMsg->execute([$target_user_id, $message_text]);
+            $alert_message = "Dashboard message sent successfully to User #{$target_user_id}!";
+        } catch (Exception $e) {
+            // Fallback if table doesn't exist yet
+            $alert_message = "Error: Please run the SQL query to create the user_messages table first.";
+        }
     }
 }
 
-// 3. Handle Trade Triggering & Outcome Resolution
+// 4. Handle Trade Triggering & Full Financial Overrides
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_trade_status'])) {
     $trade_id = (int)$_POST['trade_id'];
     $new_status = $_POST['status'];
     $admin_comment = trim($_POST['admin_comment'] ?? '');
+    $edited_amount = filter_var($_POST['edited_amount'], FILTER_VALIDATE_FLOAT);
     $realized_profit = filter_var($_POST['realized_profit'], FILTER_VALIDATE_FLOAT);
 
     // Fetch existing trade info
@@ -88,10 +112,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_trade_status']
 
     if ($trade) {
         $old_status = $trade['status'];
+        $amount_to_use = $edited_amount !== false ? $edited_amount : $trade['amount'];
+        $profit_to_use = $realized_profit !== false ? $realized_profit : $trade['potential_profit'];
 
-        // If transition to 'completed' for the first time, credit capital + profit to user
+        // If transitioning to 'completed' for the first time, credit capital + profit to user
         if ($new_status === 'completed' && $old_status !== 'completed') {
-            $total_payout = (float)$trade['amount'] + ($realized_profit !== false ? $realized_profit : (float)$trade['potential_profit']);
+            $total_payout = $amount_to_use + $profit_to_use;
             $acc_type = $trade['account_type'];
             $u_id = $trade['user_id'];
 
@@ -106,13 +132,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_trade_status']
         // Update Trade Record
         $stmtUT = $pdo->prepare("
             UPDATE user_trades 
-            SET status = ?, realized_profit = ?, admin_comment = ?, completed_at = NOW() 
+            SET status = ?, amount = ?, potential_profit = ?, realized_profit = ?, admin_comment = ? 
             WHERE id = ?
         ");
-        $stmtUT->execute([$new_status, $realized_profit !== false ? $realized_profit : $trade['potential_profit'], $admin_comment, $trade_id]);
+        $stmtUT->execute([$new_status, $amount_to_use, $profit_to_use, $profit_to_use, $admin_comment, $trade_id]);
 
-        $alert_message = "Trade #{$trade_id} updated to '{$new_status}' successfully!";
-        $alert_type = "success";
+        $alert_message = "Trade #{$trade_id} updated successfully!";
     }
 }
 
@@ -252,19 +277,14 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
 
         .btn-green { background: var(--green); color: #000; }
         .btn-blue { background: var(--accent-blue); color: #fff; }
+        .btn-purple { background: #6b46c1; color: #fff; }
 
-        .badge-status {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
+        .modal-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 6px;
         }
-
-        .status-pending { background: rgba(255, 193, 7, 0.15); color: var(--warning); }
-        .status-in_progress { background: rgba(43, 108, 176, 0.2); color: #63b3ed; }
-        .status-completed { background: rgba(14, 203, 129, 0.15); color: var(--green); }
-        .status-cancelled { background: rgba(246, 70, 93, 0.15); color: var(--red); }
     </style>
 </head>
 <body>
@@ -311,7 +331,7 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
 
         <!-- Live Trade Control Queue -->
         <div class="section-box">
-            <div class="section-title"><i class="fa-solid fa-bolt" style="color: var(--green);"></i> User Executed Trades Panel</div>
+            <div class="section-title"><i class="fa-solid fa-bolt" style="color: var(--green);"></i> User Executed Trades Panel (Full Overrides)</div>
             <table class="admin-table">
                 <thead>
                     <tr>
@@ -319,9 +339,8 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                         <th>User</th>
                         <th>Pair</th>
                         <th>Account</th>
-                        <th>Amount</th>
-                        <th>Est. Profit</th>
-                        <th>Realized Profit</th>
+                        <th>Amount ($)</th>
+                        <th>Profit ($)</th>
                         <th>Status</th>
                         <th>Admin Comment</th>
                         <th>Action</th>
@@ -336,11 +355,8 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                                 <td><?= e($t['fullname']) ?><br><span style="color: var(--text-muted); font-size: 11px;"><?= e($t['email']) ?></span></td>
                                 <td><?= e($t['symbol']) ?>/USDT</td>
                                 <td><span style="text-transform: uppercase; font-size: 11px; color: var(--text-muted);"><?= e($t['account_type']) ?></span></td>
-                                <td>$<?= number_format($t['amount'], 2) ?></td>
-                                <td style="color: var(--green);">+$<?= number_format($t['potential_profit'], 2) ?></td>
-                                <td>
-                                    $<input type="number" step="any" name="realized_profit" class="form-control" style="width: 80px;" value="<?= e($t['realized_profit'] ?: $t['potential_profit']) ?>">
-                                </td>
+                                <td><input type="number" step="any" name="edited_amount" class="form-control" style="width: 85px;" value="<?= (float)$t['amount'] ?>"></td>
+                                <td><input type="number" step="any" name="realized_profit" class="form-control" style="width: 85px;" value="<?= (float)($t['realized_profit'] ?: $t['potential_profit']) ?>"></td>
                                 <td>
                                     <select name="status" class="form-select">
                                         <option value="pending" <?= $t['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
@@ -353,7 +369,7 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                                     <input type="text" name="admin_comment" class="form-control" placeholder="Add note..." value="<?= e($t['admin_comment']) ?>">
                                 </td>
                                 <td>
-                                    <button type="submit" name="update_trade_status" class="btn-sm btn-green">Update</button>
+                                    <button type="submit" name="update_trade_status" class="btn-sm btn-green">Save Trade</button>
                                 </td>
                             </form>
                         </tr>
@@ -362,41 +378,53 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
             </table>
         </div>
 
-        <!-- User Accounts & Balance Management -->
+        <!-- User Accounts, Balances, Passwords & Direct Messaging -->
         <div class="section-box">
-            <div class="section-title"><i class="fa-solid fa-users" style="color: var(--warning);"></i> Manage Users & Balances</div>
+            <div class="section-title"><i class="fa-solid fa-users" style="color: var(--warning);"></i> Manage Users, Balances, Passwords & Dashboard Messages</div>
             <table class="admin-table">
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Full Name</th>
-                        <th>Email</th>
+                        <th>User Details</th>
                         <th>Real Balance ($)</th>
                         <th>Demo Balance ($)</th>
-                        <th>Account Status</th>
+                        <th>Status</th>
+                        <th>Change Password</th>
+                        <th>Send Dashboard Message</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($users as $u): ?>
                         <tr>
-                            <form method="POST" action="index.php">
-                                <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                                <td>#<?= (int)$u['id'] ?></td>
-                                <td><input type="text" name="fullname" class="form-control" value="<?= e($u['fullname']) ?>" required></td>
-                                <td><input type="email" name="email" class="form-control" value="<?= e($u['email']) ?>" required></td>
-                                <td><input type="number" step="any" name="real_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['real_balance'] ?>" required></td>
-                                <td><input type="number" step="any" name="demo_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['demo_balance'] ?>" required></td>
-                                <td>
-                                    <select name="status" class="form-select">
-                                        <option value="active" <?= $u['status'] === 'active' ? 'selected' : '' ?>>Active</option>
-                                        <option value="suspended" <?= $u['status'] === 'suspended' ? 'selected' : '' ?>>Suspended</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <button type="submit" name="update_user" class="btn-sm btn-blue">Save Changes</button>
-                                </td>
-                            </form>
+                            <td>#<?= (int)$u['id'] ?></td>
+                            <td>
+                                <form method="POST" action="index.php" id="userForm<?= $u['id'] ?>">
+                                    <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                    <input type="text" name="fullname" class="form-control" value="<?= e($u['fullname']) ?>" required style="margin-bottom: 4px; width: 100%;">
+                                    <input type="email" name="email" class="form-control" value="<?= e($u['email']) ?>" required style="width: 100%;">
+                            </td>
+                            <td><input type="number" step="any" name="real_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['real_balance'] ?>" required></td>
+                            <td><input type="number" step="any" name="demo_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['demo_balance'] ?>" required></td>
+                            <td>
+                                <select name="status" class="form-select">
+                                    <option value="active" <?= $u['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+                                    <option value="suspended" <?= $u['status'] === 'suspended' ? 'selected' : '' ?>>Suspended</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="password" name="new_password" class="form-control" placeholder="New Password" style="width: 120px;">
+                            </td>
+                            <td>
+                                <div class="modal-row">
+                                    <input type="text" name="message_text" class="form-control" placeholder="Type notification..." style="width: 150px;">
+                                    <button type="submit" name="send_user_message" class="btn-sm btn-purple" title="Send Notification"><i class="fa-solid fa-paper-plane"></i></button>
+                                </div>
+                            </td>
+                            <td>
+                                <button type="submit" name="update_user" class="btn-sm btn-blue">Save Profile</button>
+                                </form>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
