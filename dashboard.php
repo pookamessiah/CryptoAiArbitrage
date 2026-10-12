@@ -54,6 +54,8 @@ if (!$user) {
 $stmtMsgs = $pdo->prepare("SELECT * FROM user_messages WHERE user_id = ? ORDER BY id DESC");
 $stmtMsgs->execute([$user_id]);
 $messages = $stmtMsgs->fetchAll(PDO::FETCH_ASSOC);
+$total_messages = count($messages);
+$preview_messages = array_slice($messages, 0, 2); // Limit preview to top 2 messages
 
 // Calculate User Stats
 $stmtStats = $pdo->prepare("
@@ -177,10 +179,75 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
         }
         .msg-box.unread { border-left: 4px solid var(--warning); background: rgba(255, 193, 7, 0.08); border-color: rgba(255, 193, 7, 0.3); }
         .msg-content p { font-size: 14px; color: #fff; }
         .msg-content span { font-size: 11px; color: var(--text-muted); }
+
+        .view-all-container {
+            text-align: right;
+            margin-top: 10px;
+        }
+        .btn-view-all {
+            background: transparent;
+            border: 1px solid var(--accent-blue);
+            color: #63b3ed;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-view-all:hover {
+            background: rgba(43, 108, 176, 0.2);
+        }
+
+        /* Modal Styles for All Notifications */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+        .modal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: min(650px, 100%);
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .modal-close {
+            background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+        .modal-body {
+            padding: 20px 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
         /* Stats Cards */
         .stats-grid {
@@ -306,27 +373,36 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             </div>
         </div>
 
-        <!-- Admin Direct Messages / Notifications Section -->
+        <!-- Admin Direct Messages / Notifications Section (Limited Preview) -->
         <?php if (!empty($messages)): ?>
         <div class="section-box">
             <div class="section-header" style="margin-bottom: 16px;">
                 <h3><i class="fa-solid fa-bell" style="color: var(--warning);"></i> Admin Notifications & Messages</h3>
+                <span style="font-size: 12px; color: var(--text-muted);">Showing latest updates</span>
             </div>
             <div>
-                <?php foreach ($messages as $m): ?>
+                <?php foreach ($preview_messages as $m): ?>
                     <div class="msg-box <?= $m['is_read'] == 0 ? 'unread' : '' ?>">
                         <div class="msg-content">
-                            <p><i class="fa-solid fa-bullhorn" style="color: var(--accent-blue); margin-right: 6px;"></i> <?= e($m['message']) ?></p>
+                            <p><i class="fa-solid fa-bullhorn" style="color: var(--accent-blue); margin-right: 6px;"></i> <?= $m['message'] ?></p>
                             <span>Received on: <?= e($m['created_at']) ?></span>
                         </div>
                         <?php if ($m['is_read'] == 0): ?>
-                            <a href="dashboard.php?mark_read=<?= $m['id'] ?>" class="btn-action btn-deposit btn-sm" style="background: var(--accent-blue); color: #fff;">Mark Read</a>
+                            <a href="dashboard.php?mark_read=<?= $m['id'] ?>" class="btn-action btn-deposit btn-sm" style="background: var(--accent-blue); color: #fff; white-space: nowrap;">Mark Read</a>
                         <?php else: ?>
-                            <span style="font-size: 12px; color: var(--green);"><i class="fa-solid fa-check"></i> Read</span>
+                            <span style="font-size: 12px; color: var(--green); white-space: nowrap;"><i class="fa-solid fa-check"></i> Read</span>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
+
+            <?php if ($total_messages > 2): ?>
+                <div class="view-all-container">
+                    <button class="btn-view-all" onclick="openNotificationsModal()">
+                        <i class="fa-solid fa-list"></i> View All Notifications (<?= $total_messages ?>)
+                    </button>
+                </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -416,6 +492,31 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         </div>
     </main>
 
+    <!-- ALL NOTIFICATIONS MODAL -->
+    <div id="notificationsModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-bell" style="color: var(--warning);"></i> All Admin Notifications (<?= $total_messages ?>)</h3>
+                <button class="modal-close" onclick="closeNotificationsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <?php foreach ($messages as $m): ?>
+                    <div class="msg-box <?= $m['is_read'] == 0 ? 'unread' : '' ?>" style="margin-bottom: 0;">
+                        <div class="msg-content">
+                            <p><i class="fa-solid fa-bullhorn" style="color: var(--accent-blue); margin-right: 6px;"></i> <?= $m['message'] ?></p>
+                            <span>Received on: <?= e($m['created_at']) ?></span>
+                        </div>
+                        <?php if ($m['is_read'] == 0): ?>
+                            <a href="dashboard.php?mark_read=<?= $m['id'] ?>" class="btn-action btn-deposit btn-sm" style="background: var(--accent-blue); color: #fff; white-space: nowrap;">Mark Read</a>
+                        <?php else: ?>
+                            <span style="font-size: 12px; color: var(--green); white-space: nowrap;"><i class="fa-solid fa-check"></i> Read</span>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
     <!-- Floating Support -->
     <div class="floating-support">
         <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support">
@@ -429,5 +530,19 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         </a>
     </div>
 
+    <script>
+        function openNotificationsModal() {
+            document.getElementById('notificationsModal').style.display = 'flex';
+        }
+        function closeNotificationsModal() {
+            document.getElementById('notificationsModal').style.display = 'none';
+        }
+        window.onclick = function(event) {
+            const modal = document.getElementById('notificationsModal');
+            if (event.target === modal) {
+                closeNotificationsModal();
+            }
+        }
+    </script>
 </body>
 </html>
