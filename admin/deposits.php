@@ -37,7 +37,7 @@ if (!$stmtAdmin->fetch()) {
 $alert_message = '';
 
 // Handle Approval / Rejection
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_deposit'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deposit_id'], $_POST['action'])) {
     $deposit_id = (int)$_POST['deposit_id'];
     $action = $_POST['action']; // 'approved' or 'rejected'
 
@@ -104,13 +104,14 @@ $deposits = $pdo->query("
         .nav-container { width: min(1200px, calc(100% - 32px)); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
         .admin-links { display: flex; gap: 20px; }
         .admin-links a { color: var(--text-main); text-decoration: none; font-weight: 600; font-size: 14px; }
+        .admin-links a:hover { color: var(--green); }
 
         .container { width: min(1200px, calc(100% - 32px)); margin: 0 auto; }
         .section-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; }
         
         .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
         .admin-table th { padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
-        .admin-table td { padding: 12px; border-bottom: 1px solid var(--border-color); }
+        .admin-table td { padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 
         .badge-status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .status-pending { background: rgba(255, 193, 7, 0.15); color: var(--warning); }
@@ -167,9 +168,8 @@ $deposits = $pdo->query("
                                 <?php if ($d['status'] === 'pending'): ?>
                                     <form method="POST" action="deposits.php" style="display: flex; gap: 6px;">
                                         <input type="hidden" name="deposit_id" value="<?= (int)$d['id'] ?>">
-                                        <button type="submit" name="action_deposit" value="action_deposit" onclick="this.form.action.value='approved'" class="btn-approve"><i class="fa-solid fa-check"></i> Approve</button>
-                                        <button type="submit" name="action_deposit" value="action_deposit" onclick="this.form.action.value='rejected'" class="btn-reject"><i class="fa-solid fa-xmark"></i> Reject</button>
-                                        <input type="hidden" name="action" value="approved">
+                                        <button type="submit" name="action" value="approved" class="btn-approve"><i class="fa-solid fa-check"></i> Approve</button>
+                                        <button type="submit" name="action" value="rejected" class="btn-reject"><i class="fa-solid fa-xmark"></i> Reject</button>
                                     </form>
                                 <?php else: ?>
                                     <span style="color: var(--text-muted); font-size: 12px;">Processed</span>
