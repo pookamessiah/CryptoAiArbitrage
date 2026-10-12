@@ -309,7 +309,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                     </div>
                     <div class="detail-row">
                         <span>Completes At:</span>
-                        <strong><?= e($trade['expires_at']) ?></strong>
+                        <strong>
+                            <span class="local-time" data-utc="<?= e($trade['expires_at']) ?>"><?= e($trade['expires_at']) ?></span>
+                        </strong>
                     </div>
                 </div>
 
@@ -327,30 +329,59 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support"><i class="fa-solid fa-envelope"></i></a>
     </div>
 
-    <?php if ($trade && !$is_completed && !$is_lost): ?>
     <script>
-        // Countdown timer for pending trades
-        const expiresAt = new Date("<?= $trade['expires_at'] ?>").getTime();
+        document.addEventListener("DOMContentLoaded", function() {
+            // 1. Convert .local-time elements to user's local device time
+            document.querySelectorAll('.local-time').forEach(el => {
+                const rawTime = el.getAttribute('data-utc');
+                if (rawTime) {
+                    let formattedString = rawTime.trim();
+                    if (!formattedString.endsWith('Z') && !formattedString.includes('+') && !formattedString.includes('-')) {
+                        formattedString = formattedString.replace(' ', 'T') + 'Z';
+                    }
+                    const dateObj = new Date(formattedString);
+                    if (!isNaN(dateObj.getTime())) {
+                        el.innerText = dateObj.toLocaleString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        });
+                    }
+                }
+            });
 
-        function updateCountdown() {
-            const now = new Date().getTime();
-            const distance = expiresAt - now;
+            <?php if ($trade && !$is_completed && !$is_lost): ?>
+            // 2. Countdown Timer Logic
+            const expiresStr = "<?= $trade['expires_at'] ?>";
+            let formattedExpires = expiresStr.trim();
+            if (!formattedExpires.endsWith('Z') && !formattedExpires.includes('+') && !formattedExpires.includes('-')) {
+                formattedExpires = formattedExpires.replace(' ', 'T') + 'Z';
+            }
+            const expiresAt = new Date(formattedExpires).getTime();
 
-            if (distance < 0) {
-                document.getElementById("countdown").innerText = "Completing trade...";
-                setTimeout(() => { location.reload(); }, 1500); // Auto-reload to trigger PHP completion handler
-                return;
+            function updateCountdown() {
+                const now = new Date().getTime();
+                const distance = expiresAt - now;
+
+                if (distance < 0) {
+                    document.getElementById("countdown").innerText = "Completing trade...";
+                    setTimeout(() => { location.reload(); }, 1500);
+                    return;
+                }
+
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                document.getElementById("countdown").innerText = minutes + "m " + seconds + "s remaining";
             }
 
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            document.getElementById("countdown").innerText = minutes + "m " + seconds + "s remaining";
-        }
-
-        setInterval(updateCountdown, 1000);
-        updateCountdown();
+            setInterval(updateCountdown, 1000);
+            updateCountdown();
+            <?php endif; ?>
+        });
     </script>
-    <?php endif; ?>
 </body>
 </html>
