@@ -1,5 +1,5 @@
 <?php
-// inc/navbar.php - Navigation Header Bar
+// inc/navbar.php - Navigation Header Bar with Auto-Translation Script
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -26,7 +26,7 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
             </a>
         </div>
 
-        <!-- Center: Navigation Links (Collapsible on mobile via hamburger) -->
+        <!-- Center: Navigation Links -->
         <div class="nav-links-wrapper" id="navMenuWrapper">
             <div class="nav-links">
                 <a href="index.php" class="nav-item"><i class="fa-solid fa-house"></i> Home</a>
@@ -35,9 +35,9 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
             </div>
         </div>
 
-        <!-- Right Side: Translator & Auth (Always Visible) -->
+        <!-- Right Side: Translator & Auth -->
         <div class="nav-actions-right">
-            <!-- Language Translator Button (Links to dedicated language page) -->
+            <!-- Language Selector Button -->
             <a href="language.php" class="lang-btn" title="Select Language">
                 <i class="fa-solid fa-globe"></i> <span><?= strtoupper($current_lang) ?></span>
             </a>
@@ -74,6 +74,20 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
     </div>
 </nav>
 
+<!-- Hidden Google Translate Element required for automated translation -->
+<div id="google_translate_element" style="display:none;"></div>
+
+<script type="text/javascript">
+function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,es,fr,de,pt,it,ru,zh-CN,ja,ko,ar,hi,tr,nl,pl,vi,id,tl,uk,el,sv,ro,th,bn,fa,ur,he,cs,hu,da,fi,no,ms,sw,ta,te,mr,gu,pa,ml',
+        autoDisplay: false
+    }, 'google_translate_element');
+}
+</script>
+<script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
 <script>
 // Mobile Hamburger Toggle Script
 document.getElementById('hamburgerToggle').addEventListener('click', function(e) {
@@ -104,6 +118,10 @@ document.getElementById('navMenuWrapper').addEventListener('click', function(e) 
     --red: #f6465d;
     --border-color: #2b313a;
 }
+
+/* Hide Google Translate Banner / Top Frame if it appears */
+.goog-te-banner-frame { display: none !important; }
+body { top: 0px !important; }
 
 .navbar {
     background: var(--bg-card);
@@ -180,7 +198,6 @@ document.getElementById('navMenuWrapper').addEventListener('click', function(e) 
     gap: 16px;
 }
 
-/* Language Selector Button */
 .lang-btn {
     background: #1e2329;
     border: 1px solid var(--border-color);
