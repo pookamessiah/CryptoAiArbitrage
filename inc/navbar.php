@@ -48,7 +48,7 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
                     <div class="lang-header">Select Language</div>
                     <div class="lang-list">
                         <?php foreach ($supported_languages as $code => $lang): ?>
-                            <a href="?set_lang=<?= $code ?>" class="<?= $current_lang === $code ? 'active-lang' : '' ?>">
+                            <a href="javascript:void(0);" onclick="changeLanguage('<?= $code ?>')" class="<?= $current_lang === $code ? 'active-lang' : '' ?>">
                                 <?= $lang['native'] ?> <span style="color: var(--text-muted); font-size: 11px;">(<?= $lang['name'] ?>)</span>
                             </a>
                         <?php endforeach; ?>
@@ -89,13 +89,18 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
 </nav>
 
 <script>
+// Client-side language switcher function (sets cookie & reloads instantly)
+function changeLanguage(langCode) {
+    document.cookie = "lang_pref=" + langCode + "; path=/; max-age=" + (86400 * 30);
+    location.reload();
+}
+
 // Mobile Hamburger Toggle Script
 document.getElementById('hamburgerToggle').addEventListener('click', function(e) {
     e.stopPropagation();
     document.getElementById('navMenuWrapper').classList.toggle('active');
 });
 
-// Close dropdown when clicking outside
 document.addEventListener('click', function() {
     const menu = document.getElementById('navMenuWrapper');
     if (menu.classList.contains('active')) {
@@ -376,6 +381,6 @@ document.getElementById('navMenuWrapper').addEventListener('click', function(e) 
         gap: 8px;
     }
 
-    .balance-badge { display: none; } /* Hide balance badge on very small screens to save space, visible in dashboard */
+    .balance-badge { display: none; }
 }
 </style>
