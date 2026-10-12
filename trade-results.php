@@ -49,7 +49,7 @@ if ($pdo && $trade_id > 0) {
             if ($now >= $expires_at) {
                 $pdo->beginTransaction();
 
-                // 1. Update trade status to completed/won
+                // 1. Update trade status to completed
                 $updateTrade = $pdo->prepare("UPDATE user_trades SET status = 'completed' WHERE id = ?");
                 $updateTrade->execute([$trade_id]);
 
@@ -77,6 +77,9 @@ if ($pdo && $trade_id > 0) {
         }
     }
 }
+
+// Calculate exact expiration timestamp in milliseconds for precise JS countdown
+$expires_ms = $trade ? strtotime($trade['expires_at']) * 1000 : 0;
 
 // Fetch user data for balance display
 $stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
@@ -331,7 +334,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // 1. Convert .local-time elements to user's local device time
+            // Local time formatting for display
             document.querySelectorAll('.local-time').forEach(el => {
                 const rawTime = el.getAttribute('data-utc');
                 if (rawTime) {
@@ -354,32 +357,34 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             });
 
             <?php if ($trade && !$is_completed && !$is_lost): ?>
-            // 2. Countdown Timer Logic
-            const expiresStr = "<?= $trade['expires_at'] ?>";
-            let formattedExpires = expiresStr.trim();
-            if (!formattedExpires.endsWith('Z') && !formattedExpires.includes('+') && !formattedExpires.includes('-')) {
-                formattedExpires = formattedExpires.replace(' ', 'T') + 'Z';
-            }
-            const expiresAt = new Date(formattedExpires).getTime();
-
-            function updateCountdown() {
+            // Precise Countdown Timer using UTC milliseconds from PHP
+            const expiresAt = <?= $expires_ms ?>;
+            
+            const timerInterval = setInterval(function() {
                 const now = new Date().getTime();
                 const distance = expiresAt - now;
 
-                if (distance < 0) {
-                    document.getElementById("countdown").innerText = "Completing trade...";
-                    setTimeout(() => { location.reload(); }, 1500);
+                if (distance <= 0) {
+                    clearInterval(timerInterval); // Stop the interval so it doesn't loop
+                    document.getElementById("countdown").innerText = "Trade completed! Updating...";
+                    setTimeout(function() {
+                        location.reload(); // Refresh ONCE when countdown finishes
+                    }, 1000);
                     return;
                 }
 
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-                document.getElementById("countdown").innerText = minutes + "m " + seconds + "s remaining";
-            }
+                let timeText = "";
+                if (hours > 0) {
+                    timeText += hours + "h ";
+                }
+                timeText += minutes + "m " + seconds + "s remaining";
 
-            setInterval(updateCountdown, 1000);
-            updateCountdown();
+                document.getElementById("countdown").innerText = timeText;
+            }, 1000);
             <?php endif; ?>
         });
     </script>
