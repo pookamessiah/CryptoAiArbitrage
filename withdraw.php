@@ -30,28 +30,25 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
-// Fetch latest user details
-$stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-$stmtUser->execute([$user_id]);
-$user = $stmtUser->fetch();
-
-$error_message = '';
-$success_message = '';
-
-// Process Withdrawal Request
+// Process Withdrawal Request (POST Handler)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_withdrawal'])) {
+    // Fetch latest balance inside POST to ensure accuracy
+    $stmtUser = $pdo->prepare("SELECT real_balance FROM users WHERE id = ?");
+    $stmtUser->execute([$user_id]);
+    $currentUser = $stmtUser->fetch();
+
     $amount = filter_var($_POST['amount'], FILTER_VALIDATE_FLOAT);
     $withdrawal_method = trim($_POST['withdrawal_method'] ?? '');
     $wallet_address = trim($_POST['wallet_address'] ?? '');
 
     if (!$amount || $amount <= 0) {
-        $error_message = "Please enter a valid withdrawal amount.";
-    } elseif ($amount > (float)$user['real_balance']) {
-        $error_message = "Insufficient Real Account balance. Available: $" . number_format($user['real_balance'], 2);
+        $_SESSION['error_message'] = "Please enter a valid withdrawal amount.";
+    } elseif ($amount > (float)$currentUser['real_balance']) {
+        $_SESSION['error_message'] = "Insufficient Real Account balance. Available: $" . number_format($currentUser['real_balance'], 2);
     } elseif (empty($withdrawal_method)) {
-        $error_message = "Please select a withdrawal method.";
+        $_SESSION['error_message'] = "Please select a withdrawal method.";
     } elseif (empty($wallet_address)) {
-        $error_message = "Please enter your destination wallet address.";
+        $_SESSION['error_message'] = "Please enter your destination wallet address.";
     } else {
         try {
             $pdo->beginTransaction();
@@ -68,17 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_withdrawal'])
             $stmtInsert->execute([$user_id, $amount, $withdrawal_method, $wallet_address]);
 
             $pdo->commit();
-
-            // Refresh user variable
-            $user['real_balance'] -= $amount;
-            $success_message = "Withdrawal request of $" . number_format($amount, 2) . " submitted successfully! The admin team will process your transfer.";
+            $_SESSION['success_message'] = "Withdrawal request of $" . number_format($amount, 2) . " submitted successfully! The admin team will process your transfer.";
 
         } catch (Exception $e) {
             $pdo->rollBack();
-            $error_message = "Withdrawal request failed: " . $e->getMessage();
+            $_SESSION['error_message'] = "Withdrawal request failed: " . $e->getMessage();
         }
     }
+
+    // REDIRECT TO PREVENT DUPLICATE SUBMISSION ON REFRESH (PRG Pattern)
+    header("Location: withdraw.php");
+    exit();
 }
+
+// Fetch user details for display
+$stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmtUser->execute([$user_id]);
+$user = $stmtUser->fetch();
+
+// Retrieve flash messages and clear them from session
+$error_message = $_SESSION['error_message'] ?? '';
+$success_message = $_SESSION['success_message'] ?? '';
+unset($_SESSION['error_message'], $_SESSION['success_message']);
 
 // Fetch Withdrawal History for User
 $stmtHistory = $pdo->prepare("SELECT * FROM withdrawals WHERE user_id = ? ORDER BY id DESC");
@@ -87,10 +95,12 @@ $withdrawal_history = $stmtHistory->fetchAll();
 
 // Support Contacts
 $support = ['phone' => '+1 (800) 123-4567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
-$stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
-if ($dbSup = $stmtSup->fetch()) {
-    $support = $dbSup;
-}
+try {
+    $stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
+    if ($dbSup = $stmtSup->fetch()) {
+        $support = $dbSup;
+    }
+} catch (Exception $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -114,100 +124,36 @@ if ($dbSup = $stmtSup->fetch()) {
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', sans-serif; line-height: 1.5; padding-bottom: 60px; }
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
-            line-height: 1.5;
-            padding-bottom: 60px;
-        }
-
-        .container {
-            width: min(900px, calc(100% - 32px));
-            margin: 32px auto;
-        }
-
+        .container { width: min(900px, calc(100% - 32px)); margin: 32px auto; }
         .page-header { margin-bottom: 24px; }
         .page-header h2 { font-size: 26px; font-weight: 800; }
         .page-header p { color: var(--text-muted); font-size: 14px; }
 
-        .card-box {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 28px;
-            margin-bottom: 32px;
-        }
+        .card-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 28px; margin-bottom: 32px; }
+        .balance-box { background: #1e2329; border-radius: 8px; padding: 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
 
-        .balance-box {
-            background: #1e2329;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .alert-box {
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 18px;
-            font-size: 14px;
-        }
+        .alert-box { padding: 12px 16px; border-radius: 6px; margin-bottom: 18px; font-size: 14px; }
         .alert-danger { background: rgba(246, 70, 93, 0.15); border: 1px solid var(--red); color: #ff8091; }
         .alert-success { background: rgba(14, 203, 129, 0.15); border: 1px solid var(--green); color: #80ffd2; }
 
         .form-group { margin-bottom: 18px; }
         .form-group label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
-        .form-control, .form-select {
-            width: 100%;
-            background: #1e2329;
-            border: 1px solid var(--border-color);
-            color: #fff;
-            padding: 12px 14px;
-            border-radius: 6px;
-            font-size: 14px;
-            outline: none;
-        }
+        .form-control, .form-select { width: 100%; background: #1e2329; border: 1px solid var(--border-color); color: #fff; padding: 12px 14px; border-radius: 6px; font-size: 14px; outline: none; }
 
-        .btn-submit {
-            width: 100%;
-            background: var(--accent-blue);
-            color: #fff;
-            border: none;
-            padding: 14px;
-            border-radius: 6px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-        }
+        .btn-submit { width: 100%; background: var(--accent-blue); color: #fff; border: none; padding: 14px; border-radius: 6px; font-size: 15px; font-weight: 700; cursor: pointer; }
 
-        /* History Table */
-        .history-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-            text-align: left;
-        }
-
+        .history-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
         .history-table th { padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
         .history-table td { padding: 14px 12px; border-bottom: 1px solid var(--border-color); }
 
-        .badge-status {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
+        .badge-status { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .status-pending { background: rgba(255, 193, 7, 0.15); color: var(--warning); }
-        .status-approved { background: rgba(14, 203, 129, 0.15); color: var(--green); }
+        .status-approved, .status-completed { background: rgba(14, 203, 129, 0.15); color: var(--green); }
+        .status-processing { background: rgba(43, 108, 176, 0.2); color: #63b3ed; }
         .status-rejected { background: rgba(246, 70, 93, 0.15); color: var(--red); }
 
-        /* Floating Support Bar */
         .floating-support { position: fixed; bottom: 20px; right: 20px; z-index: 99; display: flex; flex-direction: column; gap: 10px; }
         .support-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; text-decoration: none; font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
         .sup-telegram { background: #0088cc; } .sup-phone { background: #25d366; } .sup-email { background: var(--accent-blue); }
@@ -215,7 +161,7 @@ if ($dbSup = $stmtSup->fetch()) {
 </head>
 <body>
 
-    <?php include 'inc/navbar.php'; ?>
+    <?php if (file_exists('inc/navbar.php')) include 'inc/navbar.php'; ?>
 
     <main class="container">
         <div class="page-header">
@@ -304,19 +250,5 @@ if ($dbSup = $stmtSup->fetch()) {
             <?php endif; ?>
         </div>
     </main>
-
-    <!-- Floating Support -->
-    <div class="floating-support">
-        <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support">
-            <i class="fa-brands fa-telegram"></i>
-        </a>
-        <a href="tel:<?= e($support['phone']) ?>" class="support-btn sup-phone" title="Phone Support">
-            <i class="fa-solid fa-phone"></i>
-        </a>
-        <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support">
-            <i class="fa-solid fa-envelope"></i>
-        </a>
-    </div>
-
 </body>
 </html>
