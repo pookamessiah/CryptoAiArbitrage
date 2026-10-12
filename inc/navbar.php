@@ -13,6 +13,31 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
     $nav_user = $stmtNav->fetch();
 }
 ?>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Detect user's local timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    // Find all elements with class 'local-time' and format them to user's device settings
+    document.querySelectorAll('.local-time').forEach(el => {
+        const rawTime = el.getAttribute('data-utc');
+        if (rawTime) {
+            // Convert server UTC string to Date object
+            const dateObj = new Date(rawTime.replace(' ', 'T') + 'Z');
+            if (!isNaN(dateObj.getTime())) {
+                el.innerText = dateObj.toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+    });
+});
+</script>
 <nav class="navbar">
     <div class="nav-container">
         <!-- Left Side: Hamburger & Logo -->
