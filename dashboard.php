@@ -1,5 +1,5 @@
 <?php
-// dashboard.php - User Account Overview Dashboard with Active Trade Filtering & Robust Analytics
+// dashboard.php - User Account Overview Dashboard
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -72,8 +72,8 @@ $stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
 $filter = $_GET['filter'] ?? 'all';
 $tradeQuery = "
     SELECT ut.*, 
-           COALESCE(ad.symbol, ut.symbol, 'BTC') as symbol, 
-           COALESCE(ad.coin_name, ut.coin_name, 'Bitcoin') as coin_name
+           COALESCE(ad.symbol, 'BTC') as symbol, 
+           COALESCE(ad.coin_name, 'Bitcoin') as coin_name
     FROM user_trades ut
     LEFT JOIN arbitrage_deals ad ON ut.deal_id = ad.id
     WHERE ut.user_id = ?
