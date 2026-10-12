@@ -1,5 +1,5 @@
 <?php
-// admin/withdrawals.php - Advanced Withdrawal Verification, Status Management & User Messaging
+// admin/withdrawals.php - Advanced Withdrawal Verification & Messaging Center
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -34,7 +34,7 @@ if (!$stmtAdmin->fetch()) {
     die("Access Denied: Admin Privileges Required.");
 }
 
-// Ensure user_messages table exists for sending notifications
+// Ensure user_messages table exists
 $pdo->exec("
     CREATE TABLE IF NOT EXISTS user_messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -45,16 +45,12 @@ $pdo->exec("
     )
 ");
 
-$alert_message = '';
-$alert_type = 'success';
-
-// Handle Status Change & Notifications
+// Handle Status Change & Notifications (POST Handler with PRG)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['withdrawal_id'], $_POST['new_status'])) {
     $withdrawal_id = (int)$_POST['withdrawal_id'];
     $new_status = trim($_POST['new_status']);
     $admin_note = trim($_POST['admin_note'] ?? '');
 
-    // Allowed statuses
     $valid_statuses = ['pending', 'approved', 'processing', 'completed', 'rejected'];
     if (!in_array($new_status, $valid_statuses)) {
         $new_status = 'pending';
@@ -69,31 +65,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['withdrawal_id'], $_PO
         try {
             $pdo->beginTransaction();
 
-            // Refund logic: If moving TO rejected FROM a non-rejected status, refund balance
             if ($new_status === 'rejected' && $old_status !== 'rejected') {
                 $stmtRefund = $pdo->prepare("UPDATE users SET real_balance = real_balance + ? WHERE id = ?");
                 $stmtRefund->execute([(float)$w['amount'], (int)$w['user_id']]);
-            } 
-            // Deduct logic: If it WAS rejected and now being approved/completed, re-deduct balance
-            elseif ($old_status === 'rejected' && in_array($new_status, ['approved', 'processing', 'completed'])) {
-                // Check if user has enough balance
+            } elseif ($old_status === 'rejected' && in_array($new_status, ['approved', 'processing', 'completed'])) {
                 $stmtUCheck = $pdo->prepare("SELECT real_balance FROM users WHERE id = ?");
                 $stmtUCheck->execute([(int)$w['user_id']]);
                 $uBal = $stmtUCheck->fetchColumn();
 
                 if ((float)$uBal < (float)$w['amount']) {
-                    throw new Exception("User has insufficient balance for this re-activation refund adjustment.");
+                    throw new Exception("User has insufficient balance for this re-activation adjustment.");
                 }
 
                 $stmtDeduct = $pdo->prepare("UPDATE users SET real_balance = real_balance - ? WHERE id = ?");
                 $stmtDeduct->execute([(float)$w['amount'], (int)$w['user_id']]);
             }
 
-            // Update Withdrawal Status
             $stmtUpd = $pdo->prepare("UPDATE withdrawals SET status = ? WHERE id = ?");
             $stmtUpd->execute([$new_status, $withdrawal_id]);
 
-            // Send Notification to User if note provided or status changed
             $notification_text = "Your withdrawal request #WD-{$withdrawal_id} for $" . number_format($w['amount'], 2) . " has been updated to: <strong>" . strtoupper($new_status) . "</strong>.";
             if (!empty($admin_note)) {
                 $notification_text .= "<br>Admin Note: " . e($admin_note);
@@ -103,16 +93,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['withdrawal_id'], $_PO
             $stmtMsg->execute([(int)$w['user_id'], $notification_text]);
 
             $pdo->commit();
-            $alert_message = "Withdrawal #{$withdrawal_id} status successfully updated to " . strtoupper($new_status) . "!";
-            $alert_type = 'success';
+            $_SESSION['admin_alert'] = "Withdrawal #{$withdrawal_id} status successfully updated to " . strtoupper($new_status) . "!";
+            $_SESSION['alert_type'] = 'success';
 
         } catch (Exception $e) {
             $pdo->rollBack();
-            $alert_message = "Error: " . $e->getMessage();
-            $alert_type = 'danger';
+            $_SESSION['admin_alert'] = "Error: " . $e->getMessage();
+            $_SESSION['alert_type'] = 'danger';
         }
     }
+
+    // Redirect to prevent form resubmission on refresh
+    header("Location: withdrawals.php");
+    exit();
 }
+
+// Retrieve flash messages
+$alert_message = $_SESSION['admin_alert'] ?? '';
+$alert_type = $_SESSION['alert_type'] ?? 'success';
+unset($_SESSION['admin_alert'], $_SESSION['alert_type']);
 
 // Fetch all withdrawals
 $withdrawals = $pdo->query("
