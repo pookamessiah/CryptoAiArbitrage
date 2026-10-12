@@ -1,5 +1,5 @@
 <?php
-// language.php - 40 Language Selection Hub with Instant Translation Hook
+// language.php - Smooth Language Selection Hub
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -46,25 +46,6 @@ $supported_languages = [
     'pa' => ['name' => 'Punjabi', 'native' => 'ਪੰਜਾਬੀ'],
     'ml' => ['name' => 'Malayalam', 'native' => 'മലയാളം']
 ];
-
-// Handle language selection action
-if (isset($_GET['set_lang']) && array_key_exists($_GET['set_lang'], $supported_languages)) {
-    $lang_code = $_GET['set_lang'];
-    $_SESSION['lang'] = $lang_code;
-    
-    // Set standard preference cookie
-    setcookie('lang_pref', $lang_code, time() + (86400 * 30), '/');
-    
-    // Set Google Translate cookie so the whole page translates automatically
-    if ($lang_code === 'en') {
-        setcookie('googtrans', '', time() - 3600, '/'); // Clear translate cookie for English
-    } else {
-        setcookie('googtrans', '/en/' . $lang_code, time() + (86400 * 30), '/');
-    }
-    
-    header("Location: index.php");
-    exit();
-}
 
 $current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
 ?>
@@ -119,6 +100,7 @@ $current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
             flex-direction: column;
             gap: 4px;
             transition: all 0.2s ease;
+            cursor: pointer;
         }
 
         .lang-card:hover {
@@ -158,10 +140,10 @@ $current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
 
         <div class="lang-grid">
             <?php foreach ($supported_languages as $code => $lang): ?>
-                <a href="language.php?set_lang=<?= $code ?>" class="lang-card <?= $current_lang === $code ? 'active' : '' ?>">
+                <div onclick="setLanguage('<?= $code ?>')" class="lang-card <?= $current_lang === $code ? 'active' : '' ?>">
                     <span class="lang-native"><?= htmlspecialchars($lang['native']) ?></span>
                     <span class="lang-english"><?= htmlspecialchars($lang['name']) ?></span>
-                </a>
+                </div>
             <?php endforeach; ?>
         </div>
 
@@ -170,5 +152,21 @@ $current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
         </div>
     </div>
 
+    <script>
+    function setLanguage(langCode) {
+        // Set standard preference cookie
+        document.cookie = "lang_pref=" + langCode + "; path=/; max-age=" + (86400 * 30);
+        
+        // Set Google Translate cookie
+        if (langCode === 'en') {
+            document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        } else {
+            document.cookie = "googtrans=/en/" + langCode + "; path=/; max-age=" + (86400 * 30);
+        }
+        
+        // Smooth transition back to home
+        window.location.href = "index.php";
+    }
+    </script>
 </body>
 </html>
