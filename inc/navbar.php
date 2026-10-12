@@ -328,4 +328,12 @@ body { top: 0px !important; }
 
     .balance-badge { display: none; }
 }
+    /* Hide content briefly until Google Translate initializes to prevent flashing */
+body {
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in-out forwards;
+}
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
 </style>
