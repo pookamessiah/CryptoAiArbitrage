@@ -587,7 +587,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         <div class="grid-2">
             <div class="content-card">
                 <h3><i class="fa-solid fa-book-open"></i> How Cross-Market Arbitrage Works</h3>
-                <p>Digital asset prices diverge across decentralized protocols (Uniswap, Raydium, Cetus) and centralized platforms (Binance, Bybit, OKX). By integrating Spot, Perpetual Futures, and funding-rate basis spreads, our scanning engine detects profitable inefficiencies and executes managed order routing to secure risk-free yield.</p>
+                <p>Digital asset prices diverge across decentralized protocols (Uniswap, Raydium, Cetus) and centralized platforms (Binance, Bybit, OKX). By integrating Spot, Perpetual Futures, and funding-rate basis spreads, our scanning engine detects profitable opportunities and executes order routing to secure risk-free yield.</p>
             </div>
             <div class="content-card">
                 <h3><i class="fa-solid fa-shield-halved"></i> Why Trade with ArbitragePro</h3>
@@ -718,7 +718,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                 </div>
                 <div class="footer-col">
                     <h4>Risk &amp; Compliance</h4>
-                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Crypto arbitrage involves execution timing and network fees. Ensure your account is sufficiently funded before dispatching managed trades.</p>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Crypto arbitrage involves execution timing and network fees. Ensure your account is sufficiently funded before dispatching trades.</p>
                 </div>
             </div>
 
@@ -865,7 +865,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                             <div>
                                 <div class="card-meta">
                                     <span><i class="fa-regular fa-clock"></i> ${d.time}</span>
-                                    <span><i class="fa-solid fa-shield-halved"></i> Managed</span>
+                                    <span><i class="fa-solid fa-shield-halved"></i> Guaranteed</span>
                                 </div>
                                 <form action="trade.php" method="POST">
                                     <input type="hidden" name="symbol" value="${d.symbol}">
