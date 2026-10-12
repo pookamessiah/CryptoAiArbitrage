@@ -1,5 +1,5 @@
 <?php
-// language.php - Dedicated Language Selection Hub (40 Languages)
+// language.php - 40 Language Selection Hub with Instant Translation Hook
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -51,7 +51,16 @@ $supported_languages = [
 if (isset($_GET['set_lang']) && array_key_exists($_GET['set_lang'], $supported_languages)) {
     $lang_code = $_GET['set_lang'];
     $_SESSION['lang'] = $lang_code;
+    
+    // Set standard preference cookie
     setcookie('lang_pref', $lang_code, time() + (86400 * 30), '/');
+    
+    // Set Google Translate cookie so the whole page translates automatically
+    if ($lang_code === 'en') {
+        setcookie('googtrans', '', time() - 3600, '/'); // Clear translate cookie for English
+    } else {
+        setcookie('googtrans', '/en/' . $lang_code, time() + (86400 * 30), '/');
+    }
     
     header("Location: index.php");
     exit();
@@ -144,7 +153,7 @@ $current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
     <div class="container">
         <div class="header-box">
             <h1><i class="fa-solid fa-globe" style="color: var(--green);"></i> Choose Your Preferred Language</h1>
-            <p>Select from over 40 supported languages to customize your platform experience.</p>
+            <p>Select from over 40 supported languages to translate your platform experience instantly.</p>
         </div>
 
         <div class="lang-grid">
