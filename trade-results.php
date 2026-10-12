@@ -308,7 +308,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                         </strong>
                     </div>
                     <div class="detail-row">
-                        <span>Expires At:</span>
+                        <span>Completes At:</span>
                         <strong><?= e($trade['expires_at']) ?></strong>
                     </div>
                 </div>
