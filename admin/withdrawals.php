@@ -1,5 +1,5 @@
 <?php
-// admin/withdrawals.php - Withdrawal Verification and Processing Center
+// admin/withdrawals.php - Advanced Withdrawal Verification, Status Management & User Messaging
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -34,37 +34,82 @@ if (!$stmtAdmin->fetch()) {
     die("Access Denied: Admin Privileges Required.");
 }
 
-$alert_message = '';
+// Ensure user_messages table exists for sending notifications
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS user_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        message TEXT NOT NULL,
+        is_read TINYINT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+");
 
-// Handle Approval / Rejection
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['withdrawal_id'], $_POST['action'])) {
+$alert_message = '';
+$alert_type = 'success';
+
+// Handle Status Change & Notifications
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['withdrawal_id'], $_POST['new_status'])) {
     $withdrawal_id = (int)$_POST['withdrawal_id'];
-    $action = $_POST['action']; // 'approved' or 'rejected'
+    $new_status = trim($_POST['new_status']);
+    $admin_note = trim($_POST['admin_note'] ?? '');
+
+    // Allowed statuses
+    $valid_statuses = ['pending', 'approved', 'processing', 'completed', 'rejected'];
+    if (!in_array($new_status, $valid_statuses)) {
+        $new_status = 'pending';
+    }
 
     $stmtW = $pdo->prepare("SELECT * FROM withdrawals WHERE id = ?");
     $stmtW->execute([$withdrawal_id]);
     $w = $stmtW->fetch();
 
-    if ($w && $w['status'] === 'pending') {
+    if ($w) {
+        $old_status = $w['status'];
         try {
             $pdo->beginTransaction();
 
-            if ($action === 'rejected') {
-                // Refund funds back to User's Real Balance
+            // Refund logic: If moving TO rejected FROM a non-rejected status, refund balance
+            if ($new_status === 'rejected' && $old_status !== 'rejected') {
                 $stmtRefund = $pdo->prepare("UPDATE users SET real_balance = real_balance + ? WHERE id = ?");
                 $stmtRefund->execute([(float)$w['amount'], (int)$w['user_id']]);
+            } 
+            // Deduct logic: If it WAS rejected and now being approved/completed, re-deduct balance
+            elseif ($old_status === 'rejected' && in_array($new_status, ['approved', 'processing', 'completed'])) {
+                // Check if user has enough balance
+                $stmtUCheck = $pdo->prepare("SELECT real_balance FROM users WHERE id = ?");
+                $stmtUCheck->execute([(int)$w['user_id']]);
+                $uBal = $stmtUCheck->fetchColumn();
+
+                if ((float)$uBal < (float)$w['amount']) {
+                    throw new Exception("User has insufficient balance for this re-activation refund adjustment.");
+                }
+
+                $stmtDeduct = $pdo->prepare("UPDATE users SET real_balance = real_balance - ? WHERE id = ?");
+                $stmtDeduct->execute([(float)$w['amount'], (int)$w['user_id']]);
             }
 
-            // Update Withdrawal Record Status
+            // Update Withdrawal Status
             $stmtUpd = $pdo->prepare("UPDATE withdrawals SET status = ? WHERE id = ?");
-            $stmtUpd->execute([$action, $withdrawal_id]);
+            $stmtUpd->execute([$new_status, $withdrawal_id]);
+
+            // Send Notification to User if note provided or status changed
+            $notification_text = "Your withdrawal request #WD-{$withdrawal_id} for $" . number_format($w['amount'], 2) . " has been updated to: <strong>" . strtoupper($new_status) . "</strong>.";
+            if (!empty($admin_note)) {
+                $notification_text .= "<br>Admin Note: " . e($admin_note);
+            }
+
+            $stmtMsg = $pdo->prepare("INSERT INTO user_messages (user_id, message, is_read) VALUES (?, ?, 0)");
+            $stmtMsg->execute([(int)$w['user_id'], $notification_text]);
 
             $pdo->commit();
-            $alert_message = "Withdrawal #{$withdrawal_id} has been {$action} successfully!";
+            $alert_message = "Withdrawal #{$withdrawal_id} status successfully updated to " . strtoupper($new_status) . "!";
+            $alert_type = 'success';
 
         } catch (Exception $e) {
             $pdo->rollBack();
             $alert_message = "Error: " . $e->getMessage();
+            $alert_type = 'danger';
         }
     }
 }
@@ -75,7 +120,7 @@ $withdrawals = $pdo->query("
     FROM withdrawals w 
     JOIN users u ON w.user_id = u.id 
     ORDER BY w.id DESC
-")->fetchAll();
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -101,7 +146,7 @@ $withdrawals = $pdo->query("
         body { background-color: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', sans-serif; padding-bottom: 60px; }
 
         .admin-nav { background: #181a20; border-bottom: 1px solid var(--border-color); padding: 16px 0; margin-bottom: 30px; }
-        .nav-container { width: min(1200px, calc(100% - 32px)); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .nav-container { width: min(1200px, calc(100% - 32px)); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .admin-links { display: flex; gap: 20px; }
         .admin-links a { color: var(--text-main); text-decoration: none; font-weight: 600; font-size: 14px; }
         .admin-links a:hover { color: var(--green); }
@@ -111,26 +156,29 @@ $withdrawals = $pdo->query("
         
         .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
         .admin-table th { padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); }
-        .admin-table td { padding: 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        .admin-table td { padding: 14px 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 
-        .badge-status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge-status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; display: inline-block; }
         .status-pending { background: rgba(255, 193, 7, 0.15); color: var(--warning); }
-        .status-approved { background: rgba(14, 203, 129, 0.15); color: var(--green); }
+        .status-approved, .status-completed { background: rgba(14, 203, 129, 0.15); color: var(--green); }
+        .status-processing { background: rgba(43, 108, 176, 0.2); color: #63b3ed; }
         .status-rejected { background: rgba(246, 70, 93, 0.15); color: var(--red); }
 
-        .btn-approve { background: var(--green); color: #000; border: none; padding: 6px 12px; border-radius: 4px; font-weight: 700; cursor: pointer; }
-        .btn-reject { background: var(--red); color: #fff; border: none; padding: 6px 12px; border-radius: 4px; font-weight: 700; cursor: pointer; }
+        .update-form { display: flex; flex-direction: column; gap: 8px; background: #1e2329; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); min-width: 240px; }
+        .form-select, .form-input { background: var(--bg-dark); border: 1px solid var(--border-color); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 12px; outline: none; }
+        .btn-update { background: var(--accent-blue); color: #fff; border: none; padding: 6px 10px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 12px; }
+        .btn-update:hover { background: #3182ce; }
     </style>
 </head>
 <body>
 
     <nav class="admin-nav">
         <div class="nav-container">
-            <h2 style="font-size: 20px;"><i class="fa-solid fa-money-bill-transfer" style="color: var(--accent-blue);"></i> Withdrawal Payouts</h2>
+            <h2 style="font-size: 20px;"><i class="fa-solid fa-money-bill-transfer" style="color: var(--accent-blue);"></i> Withdrawal Payouts & Management</h2>
             <div class="admin-links">
                 <a href="index.php"><i class="fa-solid fa-gauge"></i> Overview & Trades</a>
                 <a href="deposits.php"><i class="fa-solid fa-wallet"></i> Manage Deposits</a>
-                <a href="withdrawals.php"><i class="fa-solid fa-money-bill-transfer"></i> Manage Withdrawals</a>
+                <a href="withdrawals.php" style="color: var(--green);"><i class="fa-solid fa-money-bill-transfer"></i> Manage Withdrawals</a>
             </div>
         </div>
     </nav>
@@ -138,47 +186,69 @@ $withdrawals = $pdo->query("
     <main class="container">
         <div class="section-box">
             <?php if (!empty($alert_message)): ?>
-                <div style="padding: 12px; background: rgba(14, 203, 129, 0.15); color: var(--green); border-radius: 6px; margin-bottom: 20px;"><?= e($alert_message) ?></div>
+                <div style="padding: 12px 16px; background: <?= $alert_type === 'danger' ? 'rgba(246, 70, 93, 0.15)' : 'rgba(14, 203, 129, 0.15)' ?>; color: <?= $alert_type === 'danger' ? 'var(--red)' : 'var(--green)' ?>; border-radius: 6px; margin-bottom: 20px; font-weight: 600;">
+                    <i class="fa-solid fa-circle-info"></i> <?= e($alert_message) ?>
+                </div>
             <?php endif; ?>
 
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Ref ID</th>
-                        <th>User</th>
-                        <th>Method</th>
-                        <th>Amount</th>
-                        <th>Destination Address</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($withdrawals as $w): ?>
+            <div style="overflow-x: auto;">
+                <table class="admin-table">
+                    <thead>
                         <tr>
-                            <td><strong>#WD-<?= (int)$w['id'] ?></strong></td>
-                            <td><?= e($w['fullname']) ?><br><span style="color: var(--text-muted); font-size: 11px;"><?= e($w['email']) ?></span></td>
-                            <td><?= e($w['withdrawal_method']) ?></td>
-                            <td>$<?= number_format($w['amount'], 2) ?></td>
-                            <td style="font-family: monospace; font-size: 11px;"><?= e($w['wallet_address']) ?></td>
-                            <td><span class="badge-status status-<?= e($w['status']) ?>"><?= e($w['status']) ?></span></td>
-                            <td><?= e(date('M d, H:i', strtotime($w['created_at']))) ?></td>
-                            <td>
-                                <?php if ($w['status'] === 'pending'): ?>
-                                    <form method="POST" action="withdrawals.php" style="display: flex; gap: 6px;">
-                                        <input type="hidden" name="withdrawal_id" value="<?= (int)$w['id'] ?>">
-                                        <button type="submit" name="action" value="approved" class="btn-approve"><i class="fa-solid fa-check"></i> Approve</button>
-                                        <button type="submit" name="action" value="rejected" class="btn-reject"><i class="fa-solid fa-xmark"></i> Reject & Refund</button>
-                                    </form>
-                                <?php else: ?>
-                                    <span style="color: var(--text-muted); font-size: 12px;">Processed</span>
-                                <?php endif; ?>
-                            </td>
+                            <th>Ref ID</th>
+                            <th>User</th>
+                            <th>Method</th>
+                            <th>Amount</th>
+                            <th>Destination Address</th>
+                            <th>Current Status</th>
+                            <th>Date</th>
+                            <th>Manage & Notify User</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php if (!empty($withdrawals)): ?>
+                            <?php foreach ($withdrawals as $w): ?>
+                                <tr>
+                                    <td><strong>#WD-<?= (int)$w['id'] ?></strong></td>
+                                    <td><?= e($w['fullname']) ?><br><span style="color: var(--text-muted); font-size: 11px;"><?= e($w['email']) ?></span></td>
+                                    <td><?= e($w['withdrawal_method']) ?></td>
+                                    <td>$<?= number_format($w['amount'], 2) ?></td>
+                                    <td style="font-family: monospace; font-size: 11px; word-break: break-all; max-width: 180px;"><?= e($w['wallet_address']) ?></td>
+                                    <td>
+                                        <span class="badge-status status-<?= e($w['status']) ?>">
+                                            <?= e($w['status']) ?>
+                                        </span>
+                                    </td>
+                                    <td><?= e(date('M d, H:i', strtotime($w['created_at']))) ?></td>
+                                    <td>
+                                        <form method="POST" action="withdrawals.php" class="update-form">
+                                            <input type="hidden" name="withdrawal_id" value="<?= (int)$w['id'] ?>">
+                                            
+                                            <select name="new_status" class="form-select" required>
+                                                <option value="pending" <?= $w['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
+                                                <option value="approved" <?= $w['status'] === 'approved' ? 'selected' : '' ?>>Approved</option>
+                                                <option value="processing" <?= $w['status'] === 'processing' ? 'selected' : '' ?>>Processing</option>
+                                                <option value="completed" <?= $w['status'] === 'completed' ? 'selected' : '' ?>>Completed</option>
+                                                <option value="rejected" <?= $w['status'] === 'rejected' ? 'selected' : '' ?>>Rejected (Refunds Balance)</option>
+                                            </select>
+
+                                            <input type="text" name="admin_note" class="form-input" placeholder="Optional notification note...">
+
+                                            <button type="submit" class="btn-update">
+                                                <i class="fa-solid fa-paper-plane"></i> Update & Notify
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">No withdrawal requests found.</td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </main>
 </body>
