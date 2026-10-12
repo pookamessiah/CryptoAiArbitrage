@@ -4,9 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-if (!isset($supported_languages)) {
-    require_once __DIR__ . '/../language.php';
-}
+$current_lang = $_SESSION['lang'] ?? ($_COOKIE['lang_pref'] ?? 'en');
 
 $nav_user = null;
 if (isset($_SESSION['user_id']) && isset($pdo)) {
@@ -39,22 +37,10 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
 
         <!-- Right Side: Translator & Auth (Always Visible) -->
         <div class="nav-actions-right">
-            <!-- Language Translator Selector -->
-            <div class="lang-dropdown">
-                <button class="lang-btn" aria-label="Select Language">
-                    <i class="fa-solid fa-globe"></i> <span><?= strtoupper($current_lang) ?></span>
-                </button>
-                <div class="lang-menu">
-                    <div class="lang-header">Select Language</div>
-                    <div class="lang-list">
-                        <?php foreach ($supported_languages as $code => $lang): ?>
-                            <a href="javascript:void(0);" onclick="changeLanguage('<?= $code ?>')" class="<?= $current_lang === $code ? 'active-lang' : '' ?>">
-                                <?= $lang['native'] ?> <span style="color: var(--text-muted); font-size: 11px;">(<?= $lang['name'] ?>)</span>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </div>
+            <!-- Language Translator Button (Links to dedicated language page) -->
+            <a href="language.php" class="lang-btn" title="Select Language">
+                <i class="fa-solid fa-globe"></i> <span><?= strtoupper($current_lang) ?></span>
+            </a>
 
             <!-- Authentication / User Profile -->
             <div class="nav-auth">
@@ -89,12 +75,6 @@ if (isset($_SESSION['user_id']) && isset($pdo)) {
 </nav>
 
 <script>
-// Client-side language switcher function (sets cookie & reloads instantly)
-function changeLanguage(langCode) {
-    document.cookie = "lang_pref=" + langCode + "; path=/; max-age=" + (86400 * 30);
-    location.reload();
-}
-
 // Mobile Hamburger Toggle Script
 document.getElementById('hamburgerToggle').addEventListener('click', function(e) {
     e.stopPropagation();
@@ -200,12 +180,7 @@ document.getElementById('navMenuWrapper').addEventListener('click', function(e) 
     gap: 16px;
 }
 
-/* Language Selector Styles */
-.lang-dropdown {
-    position: relative;
-    display: inline-block;
-}
-
+/* Language Selector Button */
 .lang-btn {
     background: #1e2329;
     border: 1px solid var(--border-color);
@@ -214,60 +189,13 @@ document.getElementById('navMenuWrapper').addEventListener('click', function(e) 
     border-radius: 6px;
     font-weight: 600;
     font-size: 13px;
-    cursor: pointer;
+    text-decoration: none;
     display: flex;
     align-items: center;
     gap: 6px;
+    transition: border-color 0.2s;
 }
-
-.lang-menu {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: 100%;
-    margin-top: 8px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    width: 200px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    z-index: 1010;
-    overflow: hidden;
-}
-
-.lang-dropdown:hover .lang-menu, .lang-dropdown:focus-within .lang-menu { display: block; }
-
-.lang-header {
-    padding: 10px 14px;
-    font-size: 11px;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border-color);
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.lang-list {
-    max-height: 250px;
-    overflow-y: auto;
-}
-
-.lang-list::-webkit-scrollbar { width: 6px; }
-.lang-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-
-.lang-menu a {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 14px;
-    color: var(--text-main);
-    text-decoration: none;
-    font-size: 13px;
-}
-
-.lang-menu a:hover, .lang-menu a.active-lang {
-    background: var(--bg-hover);
-    color: var(--green);
-}
+.lang-btn:hover { border-color: var(--green); color: var(--green); }
 
 .nav-auth {
     display: flex;
