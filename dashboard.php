@@ -1,5 +1,5 @@
 <?php
-// dashboard.php - User Account Overview Dashboard with Admin Messaging
+// dashboard.php - User Account Overview Dashboard with Active Trade Filtering & Robust Analytics
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -42,44 +42,61 @@ if (isset($_GET['mark_read'])) {
 // Fetch User Info
 $stmtUser = $pdo->prepare("SELECT * FROM users WHERE id = ?");
 $stmtUser->execute([$user_id]);
-$user = $stmtUser->fetch();
+$user = $stmtUser->fetch(PDO::FETCH_ASSOC);
+
+if (!$user) {
+    session_destroy();
+    header("Location: login.php");
+    exit();
+}
 
 // Fetch Admin Direct Messages / Notifications
 $stmtMsgs = $pdo->prepare("SELECT * FROM user_messages WHERE user_id = ? ORDER BY id DESC");
 $stmtMsgs->execute([$user_id]);
-$messages = $stmtMsgs->fetchAll();
+$messages = $stmtMsgs->fetchAll(PDO::FETCH_ASSOC);
 
 // Calculate User Stats
 $stmtStats = $pdo->prepare("
     SELECT 
         COUNT(*) as total_trades,
-        SUM(CASE WHEN status IN ('pending', 'in_progress') THEN 1 ELSE 0 END) as active_trades,
+        SUM(CASE WHEN status IN ('pending', 'in_progress', 'active') THEN 1 ELSE 0 END) as active_trades,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_trades,
-        SUM(CASE WHEN status = 'completed' THEN realized_profit ELSE 0 END) as total_profit
+        SUM(CASE WHEN status = 'completed' THEN COALESCE(realized_profit, potential_profit, 0) ELSE 0 END) as total_profit
     FROM user_trades 
     WHERE user_id = ?
 ");
 $stmtStats->execute([$user_id]);
-$stats = $stmtStats->fetch();
+$stats = $stmtStats->fetch(PDO::FETCH_ASSOC);
 
-// Fetch Recent Trades
-$stmtRecent = $pdo->prepare("
-    SELECT ut.*, ad.symbol, ad.coin_name
+// Handle Filtering (All Trades vs Active Trades)
+$filter = $_GET['filter'] ?? 'all';
+$tradeQuery = "
+    SELECT ut.*, 
+           COALESCE(ad.symbol, ut.symbol, 'BTC') as symbol, 
+           COALESCE(ad.coin_name, ut.coin_name, 'Bitcoin') as coin_name
     FROM user_trades ut
-    INNER JOIN arbitrage_deals ad ON ut.deal_id = ad.id
+    LEFT JOIN arbitrage_deals ad ON ut.deal_id = ad.id
     WHERE ut.user_id = ?
-    ORDER BY ut.id DESC
-    LIMIT 5
-");
-$stmtRecent->execute([$user_id]);
-$recent_trades = $stmtRecent->fetchAll();
+";
+
+if ($filter === 'active') {
+    $tradeQuery .= " AND ut.status IN ('pending', 'in_progress', 'active')";
+}
+$tradeQuery .= " ORDER BY ut.id DESC";
+
+$stmtTrades = $pdo->prepare($tradeQuery);
+$stmtTrades->execute([$user_id]);
+$trades = $stmtTrades->fetchAll(PDO::FETCH_ASSOC);
 
 // Support details
 $support = ['phone' => '+1 (800) 123-4567', 'telegram' => '@ArbitrageSupport', 'email' => 'support@yourdomain.com'];
-$stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
-if ($dbSup = $stmtSup->fetch()) {
-    $support = $dbSup;
-}
+try {
+    $stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
+    if ($dbSup = $stmtSup->fetch(PDO::FETCH_ASSOC)) {
+        $support = $dbSup;
+    }
+} catch (Exception $e) {}
+$whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -133,10 +150,7 @@ if ($dbSup = $stmtSup->fetch()) {
         .welcome-bar h2 { font-size: 22px; font-weight: 700; }
         .welcome-bar p { color: var(--text-muted); font-size: 14px; }
 
-        .btn-group {
-            display: flex;
-            gap: 12px;
-        }
+        .btn-group { display: flex; gap: 12px; }
 
         .btn-action {
             display: inline-flex;
@@ -181,6 +195,14 @@ if ($dbSup = $stmtSup->fetch()) {
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .stat-card.clickable:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
         }
 
         .stat-title {
@@ -212,6 +234,8 @@ if ($dbSup = $stmtSup->fetch()) {
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
         .section-header h3 { font-size: 18px; font-weight: 700; }
@@ -232,6 +256,7 @@ if ($dbSup = $stmtSup->fetch()) {
         .data-table td {
             padding: 14px 12px;
             border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
         .badge-status {
@@ -243,9 +268,20 @@ if ($dbSup = $stmtSup->fetch()) {
         }
 
         .status-pending { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
-        .status-in_progress { background: rgba(43, 108, 176, 0.2); color: #63b3ed; }
+        .status-in_progress, .status-active { background: rgba(43, 108, 176, 0.2); color: #63b3ed; }
         .status-completed { background: rgba(14, 203, 129, 0.15); color: var(--green); }
-        .status-cancelled { background: rgba(246, 70, 93, 0.15); color: var(--red); }
+        .status-cancelled, .status-lost { background: rgba(246, 70, 93, 0.15); color: var(--red); }
+
+        .filter-badge {
+            background: var(--bg-hover);
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+        .filter-badge.active { background: var(--accent-blue); }
 
         /* Floating Support Bar */
         .floating-support { position: fixed; bottom: 20px; right: 20px; z-index: 99; display: flex; flex-direction: column; gap: 10px; }
@@ -255,7 +291,7 @@ if ($dbSup = $stmtSup->fetch()) {
 </head>
 <body>
 
-    <?php include 'inc/navbar.php'; ?>
+    <?php if (file_exists('inc/navbar.php')) include 'inc/navbar.php'; ?>
 
     <main class="container">
         <!-- Welcome Banner -->
@@ -298,33 +334,41 @@ if ($dbSup = $stmtSup->fetch()) {
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-title"><i class="fa-solid fa-vault"></i> Real Balance</div>
-                <div class="stat-value" style="color: var(--green);">$<?= number_format($user['real_balance'], 2) ?></div>
+                <div class="stat-value" style="color: var(--green);">$<?= number_format((float)$user['real_balance'], 2) ?></div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-title"><i class="fa-solid fa-flask"></i> Demo Balance</div>
-                <div class="stat-value" style="color: #ffc107;">$<?= number_format($user['demo_balance'], 2) ?></div>
+                <div class="stat-value" style="color: #ffc107;">$<?= number_format((float)$user['demo_balance'], 2) ?></div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-title"><i class="fa-solid fa-chart-line"></i> Total Realized Profit</div>
-                <div class="stat-value" style="color: var(--green);">+$<?= number_format($stats['total_profit'] ?? 0, 2) ?></div>
+                <div class="stat-value" style="color: var(--green);">+$<?= number_format((float)($stats['total_profit'] ?? 0), 2) ?></div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-title"><i class="fa-solid fa-arrows-spin"></i> Active Trades</div>
-                <div class="stat-value"><?= (int)($stats['active_trades'] ?? 0) ?></div>
-            </div>
+            <!-- Clickable Active Trades Card -->
+            <a href="dashboard.php?filter=active" class="stat-card clickable">
+                <div class="stat-title"><i class="fa-solid fa-arrows-spin"></i> Active Trades (Click to view)</div>
+                <div class="stat-value" style="color: #63b3ed;"><?= (int)($stats['active_trades'] ?? 0) ?></div>
+            </a>
         </div>
 
-        <!-- Recent Trades -->
+        <!-- Transactions & Trade History -->
         <div class="section-box">
             <div class="section-header">
-                <h3>Recent Arbitrage Executions</h3>
-                <a href="trade-results.php" style="color: var(--accent-blue); text-decoration: none; font-size: 14px; font-weight: 600;">View All History <i class="fa-solid fa-arrow-right"></i></a>
+                <div>
+                    <h3>
+                        <?= $filter === 'active' ? 'Active Ongoing Trades' : 'All Transactions & Trade History' ?>
+                    </h3>
+                </div>
+                <div>
+                    <a href="dashboard.php" class="filter-badge <?= $filter === 'all' ? 'active' : '' ?>">All Trades</a>
+                    <a href="dashboard.php?filter=active" class="filter-badge <?= $filter === 'active' ? 'active' : '' ?>">Active Only</a>
+                </div>
             </div>
 
-            <?php if (!empty($recent_trades)): ?>
+            <?php if (!empty($trades)): ?>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -332,31 +376,42 @@ if ($dbSup = $stmtSup->fetch()) {
                             <th>Asset Pair</th>
                             <th>Account</th>
                             <th>Amount</th>
-                            <th>Target Profit</th>
+                            <th>Target / Realized Profit</th>
                             <th>Status</th>
-                            <th>Date</th>
+                            <th>Date / Expiry</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($recent_trades as $t): ?>
+                        <?php foreach ($trades as $t): ?>
                             <tr>
                                 <td><strong>#TRD-<?= (int)$t['id'] ?></strong></td>
                                 <td><?= e($t['symbol']) ?>/USDT</td>
                                 <td><span style="text-transform: uppercase; font-size: 12px; color: var(--text-muted);"><?= e($t['account_type']) ?></span></td>
-                                <td>$<?= number_format($t['amount'], 2) ?></td>
-                                <td style="color: var(--green);">+$<?= number_format($t['potential_profit'], 2) ?></td>
+                                <td>$<?= number_format((float)$t['amount'], 2) ?></td>
+                                <td style="color: var(--green);">+$<?= number_format((float)($t['realized_profit'] ?: $t['potential_profit']), 2) ?></td>
                                 <td>
                                     <span class="badge-status status-<?= e($t['status']) ?>">
                                         <?= e(str_replace('_', ' ', $t['status'])) ?>
                                     </span>
                                 </td>
-                                <td style="color: var(--text-muted); font-size: 13px;"><?= e(date('M d, H:i', strtotime($t['started_at']))) ?></td>
+                                <td style="color: var(--text-muted); font-size: 13px;">
+                                    <?= e($t['expires_at'] ?? $t['created_at']) ?>
+                                </td>
+                                <td>
+                                    <a href="trade-results.php?trade_id=<?= (int)$t['id'] ?>" class="btn-action btn-deposit btn-sm" style="background: var(--accent-blue); color: #fff;">
+                                        <i class="fa-solid fa-eye"></i> View
+                                    </a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             <?php else: ?>
-                <p style="color: var(--text-muted); text-align: center; padding: 20px;">No trade executions yet. <a href="index.php" style="color: var(--green);">Browse available trades</a> to begin.</p>
+                <p style="color: var(--text-muted); text-align: center; padding: 30px;">
+                    <?= $filter === 'active' ? 'No active ongoing trades found right now.' : 'No trade transactions executed yet.' ?> 
+                    <a href="index.php" style="color: var(--green);">Browse available markets</a> to begin.
+                </p>
             <?php endif; ?>
         </div>
     </main>
@@ -366,8 +421,8 @@ if ($dbSup = $stmtSup->fetch()) {
         <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support">
             <i class="fa-brands fa-telegram"></i>
         </a>
-        <a href="tel:<?= e($support['phone']) ?>" class="support-btn sup-phone" title="Phone Support">
-            <i class="fa-solid fa-phone"></i>
+        <a href="https://wa.me/<?= e($whatsapp_number) ?>?text=Hello%20Support" target="_blank" class="support-btn sup-phone" title="WhatsApp Support">
+            <i class="fa-brands fa-whatsapp"></i>
         </a>
         <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support">
             <i class="fa-solid fa-envelope"></i>
