@@ -4,6 +4,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Start output buffering to prevent "headers already sent" errors
+if (!ob_get_level()) {
+    ob_start();
+}
+
 $supported_languages = [
     'en' => ['name' => 'English', 'native' => 'English'],
     'es' => ['name' => 'Spanish', 'native' => 'Español'],
@@ -35,18 +40,16 @@ if (isset($_GET['set_lang']) && array_key_exists($_GET['set_lang'], $supported_l
     $_SESSION['lang'] = $lang_code;
     setcookie('lang_pref', $lang_code, time() + (86400 * 30), '/'); // Save cookie for 30 days
     
-    // Clean redirect back to the current page without the query string
     $redirect_url = strtok($_SERVER['REQUEST_URI'], '?');
     header("Location: " . ($redirect_url ? $redirect_url : 'index.php'));
     exit();
 }
 
-// Determine active language (Session -> Cookie -> Browser Auto-detection -> Default English)
+// Determine active language
 if (!isset($_SESSION['lang'])) {
     if (isset($_COOKIE['lang_pref']) && array_key_exists($_COOKIE['lang_pref'], $supported_languages)) {
         $_SESSION['lang'] = $_COOKIE['lang_pref'];
     } else {
-        // Auto-detect browser language settings
         $browser_lang = substr($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? 'en', 0, 2);
         if (array_key_exists($browser_lang, $supported_languages)) {
             $_SESSION['lang'] = $browser_lang;
