@@ -1,5 +1,5 @@
 <?php
-// admin/index.php - Central Operations & Management Console
+// admin/index.php - Clean Admin Operations & Management Console
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -36,7 +36,6 @@ if (!$stmtAdmin->fetch()) {
 }
 
 $alert_message = '';
-$alert_type = '';
 
 // 1. Handle Support Info Updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_support'])) {
@@ -91,66 +90,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_user_message']))
             $stmtMsg->execute([$target_user_id, $message_text]);
             $alert_message = "Dashboard message sent successfully to User #{$target_user_id}!";
         } catch (Exception $e) {
-            // Fallback if table doesn't exist yet
-            $alert_message = "Error: Please run the SQL query to create the user_messages table first.";
+            $alert_message = "Error: Please make sure the user_messages table exists in your database.";
         }
-    }
-}
-
-// 4. Handle Trade Triggering & Full Financial Overrides
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_trade_status'])) {
-    $trade_id = (int)$_POST['trade_id'];
-    $new_status = $_POST['status'];
-    $admin_comment = trim($_POST['admin_comment'] ?? '');
-    $edited_amount = filter_var($_POST['edited_amount'], FILTER_VALIDATE_FLOAT);
-    $realized_profit = filter_var($_POST['realized_profit'], FILTER_VALIDATE_FLOAT);
-
-    // Fetch existing trade info
-    $stmtT = $pdo->prepare("SELECT * FROM user_trades WHERE id = ?");
-    $stmtT->execute([$trade_id]);
-    $trade = $stmtT->fetch();
-
-    if ($trade) {
-        $old_status = $trade['status'];
-        $amount_to_use = $edited_amount !== false ? $edited_amount : $trade['amount'];
-        $profit_to_use = $realized_profit !== false ? $realized_profit : $trade['potential_profit'];
-
-        // If transitioning to 'completed' for the first time, credit capital + profit to user
-        if ($new_status === 'completed' && $old_status !== 'completed') {
-            $total_payout = $amount_to_use + $profit_to_use;
-            $acc_type = $trade['account_type'];
-            $u_id = $trade['user_id'];
-
-            if ($acc_type === 'real') {
-                $stmtCred = $pdo->prepare("UPDATE users SET real_balance = real_balance + ? WHERE id = ?");
-            } else {
-                $stmtCred = $pdo->prepare("UPDATE users SET demo_balance = demo_balance + ? WHERE id = ?");
-            }
-            $stmtCred->execute([$total_payout, $u_id]);
-        }
-
-        // Update Trade Record
-        $stmtUT = $pdo->prepare("
-            UPDATE user_trades 
-            SET status = ?, amount = ?, potential_profit = ?, realized_profit = ?, admin_comment = ? 
-            WHERE id = ?
-        ");
-        $stmtUT->execute([$new_status, $amount_to_use, $profit_to_use, $profit_to_use, $admin_comment, $trade_id]);
-
-        $alert_message = "Trade #{$trade_id} updated successfully!";
     }
 }
 
 // Fetch System Data for View
 $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
-$all_trades = $pdo->query("
-    SELECT ut.*, u.fullname, u.email, ad.symbol, ad.coin_name 
-    FROM user_trades ut 
-    JOIN users u ON ut.user_id = u.id 
-    JOIN arbitrage_deals ad ON ut.deal_id = ad.id 
-    ORDER BY ut.id DESC
-")->fetchAll();
-
 $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['phone' => '', 'telegram' => '', 'email' => ''];
 ?>
 <!DOCTYPE html>
@@ -199,24 +145,11 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
             align-items: center;
         }
 
-        .admin-links {
-            display: flex;
-            gap: 20px;
-        }
-
-        .admin-links a {
-            color: var(--text-main);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
+        .admin-links { display: flex; gap: 20px; }
+        .admin-links a { color: var(--text-main); text-decoration: none; font-weight: 600; font-size: 14px; }
         .admin-links a:hover { color: var(--green); }
 
-        .container {
-            width: min(1300px, calc(100% - 32px));
-            margin: 0 auto;
-        }
+        .container { width: min(1300px, calc(100% - 32px)); margin: 0 auto; }
 
         .section-box {
             background: var(--bg-card);
@@ -273,6 +206,8 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
             border: none;
             cursor: pointer;
             font-size: 12px;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .btn-green { background: var(--green); color: #000; }
@@ -281,9 +216,9 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
 
         .modal-row {
             display: flex;
-            gap: 10px;
+            gap: 6px;
             align-items: center;
-            margin-top: 6px;
+            margin-top: 4px;
         }
     </style>
 </head>
@@ -293,7 +228,7 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
         <div class="nav-container">
             <h2 style="font-size: 20px;"><i class="fa-solid fa-user-shield" style="color: var(--green);"></i> Admin Portal</h2>
             <div class="admin-links">
-                <a href="index.php"><i class="fa-solid fa-gauge"></i> Overview & Trades</a>
+                <a href="index.php"><i class="fa-solid fa-gauge"></i> Overview & Users</a>
                 <a href="deposits.php"><i class="fa-solid fa-wallet"></i> Manage Deposits</a>
                 <a href="withdrawals.php"><i class="fa-solid fa-money-bill-transfer"></i> Manage Withdrawals</a>
                 <a href="../index.php" target="_blank"><i class="fa-solid fa-globe"></i> View Website</a>
@@ -329,58 +264,9 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
             </form>
         </div>
 
-        <!-- Live Trade Control Queue -->
+        <!-- User Accounts, Balances, Passwords & Individual Trade View Button -->
         <div class="section-box">
-            <div class="section-title"><i class="fa-solid fa-bolt" style="color: var(--green);"></i> User Executed Trades Panel (Full Overrides)</div>
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>Trade ID</th>
-                        <th>User</th>
-                        <th>Pair</th>
-                        <th>Account</th>
-                        <th>Amount ($)</th>
-                        <th>Profit ($)</th>
-                        <th>Status</th>
-                        <th>Admin Comment</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($all_trades as $t): ?>
-                        <tr>
-                            <form method="POST" action="index.php">
-                                <input type="hidden" name="trade_id" value="<?= (int)$t['id'] ?>">
-                                <td><strong>#TRD-<?= (int)$t['id'] ?></strong></td>
-                                <td><?= e($t['fullname']) ?><br><span style="color: var(--text-muted); font-size: 11px;"><?= e($t['email']) ?></span></td>
-                                <td><?= e($t['symbol']) ?>/USDT</td>
-                                <td><span style="text-transform: uppercase; font-size: 11px; color: var(--text-muted);"><?= e($t['account_type']) ?></span></td>
-                                <td><input type="number" step="any" name="edited_amount" class="form-control" style="width: 85px;" value="<?= (float)$t['amount'] ?>"></td>
-                                <td><input type="number" step="any" name="realized_profit" class="form-control" style="width: 85px;" value="<?= (float)($t['realized_profit'] ?: $t['potential_profit']) ?>"></td>
-                                <td>
-                                    <select name="status" class="form-select">
-                                        <option value="pending" <?= $t['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
-                                        <option value="in_progress" <?= $t['status'] === 'in_progress' ? 'selected' : '' ?>>In Progress</option>
-                                        <option value="completed" <?= $t['status'] === 'completed' ? 'selected' : '' ?>>Completed</option>
-                                        <option value="cancelled" <?= $t['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <input type="text" name="admin_comment" class="form-control" placeholder="Add note..." value="<?= e($t['admin_comment']) ?>">
-                                </td>
-                                <td>
-                                    <button type="submit" name="update_trade_status" class="btn-sm btn-green">Save Trade</button>
-                                </td>
-                            </form>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- User Accounts, Balances, Passwords & Direct Messaging -->
-        <div class="section-box">
-            <div class="section-title"><i class="fa-solid fa-users" style="color: var(--warning);"></i> Manage Users, Balances, Passwords & Dashboard Messages</div>
+            <div class="section-title"><i class="fa-solid fa-users" style="color: var(--warning);"></i> Manage Users, Balances, Passwords & Individual Trades</div>
             <table class="admin-table">
                 <thead>
                     <tr>
@@ -391,7 +277,7 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                         <th>Status</th>
                         <th>Change Password</th>
                         <th>Send Dashboard Message</th>
-                        <th>Action</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -399,13 +285,13 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                         <tr>
                             <td>#<?= (int)$u['id'] ?></td>
                             <td>
-                                <form method="POST" action="index.php" id="userForm<?= $u['id'] ?>">
+                                <form method="POST" action="index.php">
                                     <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
                                     <input type="text" name="fullname" class="form-control" value="<?= e($u['fullname']) ?>" required style="margin-bottom: 4px; width: 100%;">
                                     <input type="email" name="email" class="form-control" value="<?= e($u['email']) ?>" required style="width: 100%;">
                             </td>
-                            <td><input type="number" step="any" name="real_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['real_balance'] ?>" required></td>
-                            <td><input type="number" step="any" name="demo_balance" class="form-control" style="width: 100px;" value="<?= (float)$u['demo_balance'] ?>" required></td>
+                            <td><input type="number" step="any" name="real_balance" class="form-control" style="width: 90px;" value="<?= (float)$u['real_balance'] ?>" required></td>
+                            <td><input type="number" step="any" name="demo_balance" class="form-control" style="width: 90px;" value="<?= (float)$u['demo_balance'] ?>" required></td>
                             <td>
                                 <select name="status" class="form-select">
                                     <option value="active" <?= $u['status'] === 'active' ? 'selected' : '' ?>>Active</option>
@@ -413,16 +299,19 @@ $support_info = $pdo->query("SELECT * FROM support_info LIMIT 1")->fetch() ?: ['
                                 </select>
                             </td>
                             <td>
-                                <input type="password" name="new_password" class="form-control" placeholder="New Password" style="width: 120px;">
+                                <input type="password" name="new_password" class="form-control" placeholder="New Password" style="width: 110px;">
                             </td>
                             <td>
                                 <div class="modal-row">
-                                    <input type="text" name="message_text" class="form-control" placeholder="Type notification..." style="width: 150px;">
+                                    <input type="text" name="message_text" class="form-control" placeholder="Type notification..." style="width: 130px;">
                                     <button type="submit" name="send_user_message" class="btn-sm btn-purple" title="Send Notification"><i class="fa-solid fa-paper-plane"></i></button>
                                 </div>
                             </td>
                             <td>
-                                <button type="submit" name="update_user" class="btn-sm btn-blue">Save Profile</button>
+                                <div style="display: flex; gap: 4px; flex-direction: column;">
+                                    <button type="submit" name="update_user" class="btn-sm btn-blue">Save Profile</button>
+                                    <a href="user-trades.php?user_id=<?= (int)$u['id'] ?>" class="btn-sm btn-green" style="text-align: center;"><i class="fa-solid fa-eye"></i> View Trades</a>
+                                </div>
                                 </form>
                             </td>
                         </tr>
