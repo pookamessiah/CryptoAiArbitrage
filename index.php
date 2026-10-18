@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $is_logged_in = isset($_SESSION['user_id']);
-$user_id =$_SESSION['user_id'] ?? null;
+$user_id = $_SESSION['user_id'] ?? null;
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -18,13 +18,13 @@ $user_real_balance = 0.00;
 
 try {
     $db = new Database();
-    $pdo =$db->connect();
+    $pdo = $db->connect();
     
     // Fetch logged-in user's real balance for gating check
-    if ($is_logged_in &&$user_id) {
-        $stmtUser =$pdo->prepare("SELECT real_balance FROM users WHERE id = ?");
+    if ($is_logged_in && $user_id) {
+        $stmtUser = $pdo->prepare("SELECT real_balance FROM users WHERE id = ?");
         $stmtUser->execute([$user_id]);
-        $uData =$stmtUser->fetch(PDO::FETCH_ASSOC);
+        $uData = $stmtUser->fetch(PDO::FETCH_ASSOC);
         if ($uData) {
             $user_real_balance = (float)$uData['real_balance'];
         }
@@ -45,14 +45,14 @@ $support = [
 ];
 if ($pdo) {
     try {
-        $stmtSup =$pdo->query("SELECT * FROM support_info LIMIT 1");
-        $dbSup =$stmtSup->fetch(PDO::FETCH_ASSOC);
+        $stmtSup = $pdo->query("SELECT * FROM support_info LIMIT 1");
+        $dbSup = $stmtSup->fetch(PDO::FETCH_ASSOC);
         if ($dbSup) {
-            $support =$dbSup;
+            $support = $dbSup;
         }
     } catch (Exception $e) {}
 }
-$whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
+$whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -384,13 +384,33 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
 
         .content-card p { color: var(--text-muted); font-size: 14px; }
 
+        /* Enhanced Scrollable Price Monitor Box */
         .table-responsive {
+            max-height: 380px;
+            overflow-y: auto;
             overflow-x: auto;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 10px;
+            padding: 0;
             margin-top: 15px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) var(--bg-card);
+        }
+
+        .table-responsive::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+            background: var(--bg-card);
+            border-radius: 12px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 12px;
         }
 
         .price-table {
@@ -401,6 +421,9 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
         }
 
         .price-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
             padding: 14px;
             color: var(--text-muted);
             border-bottom: 1px solid var(--border-color);
@@ -644,7 +667,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
             </div>
         </div>
 
-        <!-- CoinMarketCap Prices Display Monitor -->
+        <!-- CoinMarketCap Prices Display Monitor (Enhanced with Scrollable Box) -->
         <div class="section-header" style="margin-top: 50px;">
             <div class="section-title"><i class="fa-solid fa-chart-simple" style="color: var(--green);"></i> CoinMarketCap Live Price Difference Monitor</div>
         </div>
@@ -763,16 +786,16 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
 
                 // Define 10+ dynamic trading pairs with a mix of <=3% and >3% profit yields
                 const rawDeals = [
-                    { id: 1, symbol: 'BTC', name: 'Bitcoin', buyEx: 'Binance (Spot)', sellEx: 'Hyperliquid (Perp)', base: btc, spread: 2.15, vol: '42M USDT' },
-                    { id: 2, symbol: 'ETH', name: 'Ethereum', buyEx: 'Uniswap v3 (DEX)', sellEx: 'Bybit (Futures)', base: eth, spread: 3.85, vol: '28M USDT' },
-                    { id: 3, symbol: 'SOL', name: 'Solana', buyEx: 'Raydium (DEX)', sellEx: 'OKX (Perp)', base: sol, spread: 2.40, vol: '35M USDT' },
-                    { id: 4, symbol: 'XRP', name: 'Ripple', buyEx: 'Gate.io (Spot)', sellEx: 'Bitget (Futures)', base: xrp, spread: 4.20, vol: '19M USDT' },
-                    { id: 5, symbol: 'SUI', name: 'Sui Network', buyEx: 'Cetus (DEX)', sellEx: 'Binance (Perp)', base: sui, spread: 5.10, vol: '22M USDT' },
-                    { id: 6, symbol: 'AVAX', name: 'Avalanche', buyEx: 'KuCoin (Spot)', sellEx: 'Kraken (Perp)', base: avax, spread: 2.80, vol: '14M USDT' },
-                    { id: 7, symbol: 'LINK', name: 'Chainlink', buyEx: 'Binance (Spot)', sellEx: 'OKX (Futures)', base: link, spread: 3.45, vol: '11M USDT' },
-                    { id: 8, symbol: 'ADA', name: 'Cardano', buyEx: 'Bybit (Spot)', sellEx: 'Binance (Perp)', base: ada, spread: 1.95, vol: '16M USDT' },
-                    { id: 9, symbol: 'DOGE', name: 'Dogecoin', buyEx: 'Gate.io (Spot)', sellEx: 'KuCoin (Perp)', base: doge, spread: 4.75, vol: '31M USDT' },
-                    { id: 10, symbol: 'MATIC', name: 'Polygon', buyEx: 'Uniswap v3 (DEX)', sellEx: 'Bybit (Futures)', base: matic, spread: 2.65, vol: '12M USDT' }
+                    { id: 1, symbol: 'BTC', name: 'Bitcoin', buyEx: 'Binance (Spot)', sellEx: 'Hyperliquid (Perp)', base: btc, spread: 2.15, vol: '42M USDT', time: '15 - 30 mins' },
+                    { id: 2, symbol: 'ETH', name: 'Ethereum', buyEx: 'Uniswap v3 (DEX)', sellEx: 'Bybit (Futures)', base: eth, spread: 3.85, vol: '28M USDT', time: '20 - 40 mins' },
+                    { id: 3, symbol: 'SOL', name: 'Solana', buyEx: 'Raydium (DEX)', sellEx: 'OKX (Perp)', base: sol, spread: 2.40, vol: '35M USDT', time: '10 - 25 mins' },
+                    { id: 4, symbol: 'XRP', name: 'Ripple', buyEx: 'Gate.io (Spot)', sellEx: 'Bitget (Futures)', base: xrp, spread: 4.20, vol: '19M USDT', time: '15 - 30 mins' },
+                    { id: 5, symbol: 'SUI', name: 'Sui Network', buyEx: 'Cetus (DEX)', sellEx: 'Binance (Perp)', base: sui, spread: 5.10, vol: '22M USDT', time: '10 - 20 mins' },
+                    { id: 6, symbol: 'AVAX', name: 'Avalanche', buyEx: 'KuCoin (Spot)', sellEx: 'Kraken (Perp)', base: avax, spread: 2.80, vol: '14M USDT', time: '20 - 35 mins' },
+                    { id: 7, symbol: 'LINK', name: 'Chainlink', buyEx: 'Binance (Spot)', sellEx: 'OKX (Futures)', base: link, spread: 3.45, vol: '11M USDT', time: '15 - 30 mins' },
+                    { id: 8, symbol: 'ADA', name: 'Cardano', buyEx: 'Bybit (Spot)', sellEx: 'Binance (Perp)', base: ada, spread: 1.95, vol: '16M USDT', time: '15 - 30 mins' },
+                    { id: 9, symbol: 'DOGE', name: 'Dogecoin', buyEx: 'Gate.io (Spot)', sellEx: 'KuCoin (Perp)', base: doge, spread: 4.75, vol: '31M USDT', time: '10 - 25 mins' },
+                    { id: 10, symbol: 'MATIC', name: 'Polygon', buyEx: 'Uniswap v3 (DEX)', sellEx: 'Bybit (Futures)', base: matic, spread: 2.65, vol: '12M USDT', time: '10 - 20 mins' }
                 ];
 
                 let carouselHtml = '';
@@ -792,7 +815,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                         </div>
                     `;
 
-                    // Carousel Card
+                    // Carousel Card with POST & GET hybrid trade form
                     carouselHtml += `
                         <div class="trade-card">
                             <div>
@@ -841,7 +864,17 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                                 ${isLocked ? `
                                     <a href="deposit.php" class="btn-trade btn-locked"><i class="fa-solid fa-lock"></i> Deposit to Unlock</a>
                                 ` : `
-                                    <a href="trade.php?symbol=${d.symbol}&id=${d.id}" class="btn-trade"><i class="fa-solid fa-bolt"></i> Execute Trade</a>
+                                    <form action="trade.php?symbol=${d.symbol}&id=${d.id}" method="POST">
+                                        <input type="hidden" name="symbol" value="${d.symbol}">
+                                        <input type="hidden" name="coin_name" value="${d.name}">
+                                        <input type="hidden" name="buy_exchange" value="${d.buyEx}">
+                                        <input type="hidden" name="sell_exchange" value="${d.sellEx}">
+                                        <input type="hidden" name="buy_price" value="${buyPrice}">
+                                        <input type="hidden" name="sell_price" value="${sellPrice}">
+                                        <input type="hidden" name="profit_percentage" value="${d.spread}">
+                                        <input type="hidden" name="estimated_time" value="${d.time}">
+                                        <button type="submit" class="btn-trade"><i class="fa-solid fa-bolt"></i> Execute Trade</button>
+                                    </form>
                                 `}
                             </div>
                         </div>
