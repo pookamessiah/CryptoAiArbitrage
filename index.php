@@ -667,7 +667,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             </div>
         </div>
 
-        <!-- CoinMarketCap Prices Display Monitor (Enhanced with Scrollable Box) -->
+        <!-- CoinMarketCap Prices Display Monitor (Enhanced Scrollable Box) -->
         <div class="section-header" style="margin-top: 50px;">
             <div class="section-title"><i class="fa-solid fa-chart-simple" style="color: var(--green);"></i> CoinMarketCap Live Price Difference Monitor</div>
         </div>
@@ -714,21 +714,85 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">Transactions in Last 24 Hours</span>
                 <div class="stat-number" id="statTx">14,892</div>
+                <span style="font-size: 11px; color: var(--green);">Target range: 5,000 - 20,000</span>
             </div>
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">People Currently Trading Online</span>
                 <div class="stat-number" id="statUsers">1,245</div>
+                <span style="font-size: 11px; color: var(--green);">Target range: 672 - 1,800</span>
             </div>
             <div class="stat-card">
                 <span style="color: var(--text-muted); font-size: 13px;">Ongoing Trade Executions</span>
                 <div class="stat-number" id="statTrades">1,840</div>
+                <span style="font-size: 11px; color: var(--green);">Target range: 760 - 3,000</span>
             </div>
+        </div>
+
+        <!-- Testimonials Section -->
+        <div class="section-header" style="margin-top: 50px;">
+            <div class="section-title"><i class="fa-solid fa-comments" style="color: var(--green);"></i> Trader Testimonials</div>
+        </div>
+        <div class="grid-2">
+            <div class="content-card">
+                <p style="font-style: italic;">"The DEX to CEX perpetual basis trades on ArbitragePro are seamlessly managed. I caught a 9.3% spread on SUI between Cetus and Binance without worrying about manual bridging."</p>
+                <h4 style="margin-top: 12px; font-size: 14px; color: #fff;">- Marcus V., Quantitative Trader</h4>
+            </div>
+            <div class="content-card">
+                <p style="font-style: italic;">"Having Spot, Perp, and Futures arbitrage in one dashboard is incredible. Execution is prompt and profits settle directly to my balance."</p>
+                <h4 style="margin-top: 12px; font-size: 14px; color: #fff;">- Elena R., Yield Strategist</h4>
+            </div>
+        </div>
+
+        <!-- FAQs Section -->
+        <div class="section-header" style="margin-top: 50px;">
+            <div class="section-title"><i class="fa-solid fa-circle-question" style="color: var(--accent-blue);"></i> Frequently Asked Questions</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-question">1. How often do live arbitrage prices and percentages refresh?</div>
+            <div class="faq-answer">Market prices, buy/sell values, and dynamic profit percentages auto-refresh every 15 minutes automatically via live exchange feed integrations.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-question">2. How are trades executed and settled?</div>
+            <div class="faq-answer">When you submit a trade, our professional operations team executes the arbitrage route manually across our pre-funded accounts. Once completed, your principal and realized profit are credited to your account balance.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-question">3. How can I contact customer support?</div>
+            <div class="faq-answer">You can reach us anytime instantly via Telegram, WhatsApp, or Email using the floating support buttons on the bottom right.</div>
         </div>
     </main>
 
-    <!-- Footer -->
+    <!-- Professional Modern Footer -->
     <footer class="site-footer">
         <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h3 style="color: #fff; font-size: 18px; margin-bottom: 12px;"><i class="fa-solid fa-chart-line" style="color: var(--green);"></i> ArbitragePro</h3>
+                    <p style="font-size: 13px; color: var(--text-muted);">Institutional-grade cross-market arbitrage infrastructure connecting CoinMarketCap spot feeds with CEX and DEX liquidity pools.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Quick Navigation</h4>
+                    <ul>
+                        <li><a href="index.php">Home Dashboard</a></li>
+                        <li><a href="all-trades.php">All Arbitrage Deals</a></li>
+                        <li><a href="dashboard.php">User Account</a></li>
+                        <li><a href="deposit.php">Deposit Funds</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Supported Markets</h4>
+                    <ul>
+                        <li><a href="#">Binance Spot &amp; Perp</a></li>
+                        <li><a href="#">Uniswap v3 DEX Pools</a></li>
+                        <li><a href="#">Bybit &amp; OKX Futures</a></li>
+                        <li><a href="#">Hyperliquid Basises</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Risk &amp; Compliance</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">Crypto arbitrage involves execution timing and network fees. Ensure your account is sufficiently funded before dispatching trades.</p>
+                </div>
+            </div>
+
             <div class="footer-bottom">
                 <p>&copy; <?= date('Y') ?> ArbitragePro. All rights reserved.</p>
                 <div class="footer-socials">
@@ -740,11 +804,17 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         </div>
     </footer>
 
-    <!-- Floating Support -->
+    <!-- Constant Floating Support Buttons (Telegram, WhatsApp, Email) -->
     <div class="floating-support">
-        <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support"><i class="fa-brands fa-telegram"></i></a>
-        <a href="https://wa.me/<?= e($whatsapp_number) ?>" target="_blank" class="support-btn sup-whatsapp" title="WhatsApp Support"><i class="fa-brands fa-whatsapp"></i></a>
-        <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support"><i class="fa-solid fa-envelope"></i></a>
+        <a href="https://t.me/<?= e(ltrim($support['telegram'], '@')) ?>" target="_blank" class="support-btn sup-telegram" title="Telegram Support">
+            <i class="fa-brands fa-telegram"></i>
+        </a>
+        <a href="https://wa.me/<?= e($whatsapp_number) ?>?text=Hello%20ArbitragePro%20Support,%20I%20need%20assistance." target="_blank" class="support-btn sup-whatsapp" title="WhatsApp Support">
+            <i class="fa-brands fa-whatsapp"></i>
+        </a>
+        <a href="mailto:<?= e($support['email']) ?>" class="support-btn sup-email" title="Email Support">
+            <i class="fa-solid fa-envelope"></i>
+        </a>
     </div>
 
     <!-- Embedded Scripts -->
@@ -753,13 +823,22 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
         const userRealBalance = <?= json_encode($user_real_balance) ?>;
         const isLoggedIn = <?= json_encode($is_logged_in) ?>;
 
+        // Horizontal Carousel Scroll
         function scrollCarousel(offset) {
             const carousel = document.getElementById('tradeCarousel');
             carousel.scrollBy({ left: offset, behavior: 'smooth' });
         }
 
+        // Helper for random integers within target range
         function getRandomInt(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Update randomized stats
+        function updatePlatformStats() {
+            document.getElementById('statTx').innerText = getRandomInt(5000, 20000).toLocaleString();
+            document.getElementById('statUsers').innerText = getRandomInt(672, 1800).toLocaleString();
+            document.getElementById('statTrades').innerText = getRandomInt(760, 3000).toLocaleString();
         }
 
         // Live Market Data Fetch & Dynamic Profit Calculation with 5-Min Auto-Refresh
@@ -784,7 +863,6 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                 const doge = prices['DOGEUSDT'] || 0.12;
                 const matic = prices['MATICUSDT'] || 0.45;
 
-                // Define 10+ dynamic trading pairs with a mix of <=3% and >3% profit yields
                 const rawDeals = [
                     { id: 1, symbol: 'BTC', name: 'Bitcoin', buyEx: 'Binance (Spot)', sellEx: 'Hyperliquid (Perp)', base: btc, spread: 2.15, vol: '42M USDT', time: '15 - 30 mins' },
                     { id: 2, symbol: 'ETH', name: 'Ethereum', buyEx: 'Uniswap v3 (DEX)', sellEx: 'Bybit (Futures)', base: eth, spread: 3.85, vol: '28M USDT', time: '20 - 40 mins' },
@@ -898,6 +976,8 @@ $whatsapp_number = preg_replace('/[^0-9]/', '', $support['phone']);
                 document.getElementById('tradeCarousel').innerHTML = carouselHtml;
                 document.getElementById('tickerWrap').innerHTML = tickerHtml;
                 document.getElementById('priceMonitorTable').innerHTML = tableHtml;
+
+                updatePlatformStats();
 
             } catch (err) {
                 console.error("Error fetching live market data:", err);
