@@ -1,5 +1,5 @@
 <?php
-// api/live-data.php - Live Arbitrage Engine & 5-Minute Price Synchronizer
+// api/live-data.php - Standalone Arbitrage Engine & 5-Minute Price Synchronizer
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -7,13 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../config/db.php';
 
 class LiveArbitrageEngine {
-    private $pdo;
-
-    public function __construct($pdoConnection) {
-        $pdo = $pdoConnection;
-    }
-
-    // Ensure database table exists
+    
+    // Ensure table exists
     public static function initTable($pdo) {
         $pdo->exec("
             CREATE TABLE IF NOT EXISTS arbitrage_deals (
@@ -31,25 +26,24 @@ class LiveArbitrageEngine {
         ");
     }
 
-    // Check if 5 minutes have passed and refresh prices using live data
-    public function refreshPricesIfNeeded($pdo) {
+    // Refresh prices automatically if older than 5 minutes (300 seconds)
+    public static function refreshPricesIfNeeded($pdo) {
         self::initTable($pdo);
 
-        // Check last update time
         $stmtCheck = $pdo->query("SELECT MAX(updated_at) as last_update FROM arbitrage_deals");
         $row = $stmtCheck->fetch(PDO::FETCH_ASSOC);
         $lastUpdate = $row['last_update'] ?? null;
 
         $currentTime = time();
-        $fiveMinutesAgo = $currentTime - 300; // 300 seconds = 5 minutes
+        $fiveMinutesAgo = $currentTime - 300;
 
         if (!$lastUpdate || strtotime($lastUpdate) < $fiveMinutesAgo) {
-            $this->fetchAndUpsertLiveDeals($pdo);
+            self::fetchAndUpsertLiveDeals($pdo);
         }
     }
 
-    // Fetch live prices from Binance API for 28+ assets and generate 25+ arbitrage opportunities
-    private function fetchAndUpsertLiveDeals($pdo) {
+    // Pull from Binance Public API for 28+ coins to build 25+ robust arbitrage pairs
+    private static function fetchAndUpsertLiveDeals($pdo) {
         $coins = [
             'BTC' => 'Bitcoin', 'ETH' => 'Ethereum', 'SOL' => 'Solana', 'XRP' => 'XRP',
             'ADA' => 'Cardano', 'AVAX' => 'Avalanche', 'DOGE' => 'Dogecoin', 'DOT' => 'Polkadot',
@@ -57,10 +51,10 @@ class LiveArbitrageEngine {
             'NEAR' => 'Near Protocol', 'ATOM' => 'Cosmos', 'XLM' => 'Stellar', 'APT' => 'Aptos',
             'SUI' => 'Sui', 'ARB' => 'Arbitrum', 'OP' => 'Optimism', 'ICP' => 'Internet Computer',
             'RENDER' => 'Render', 'INJ' => 'Injective', 'TIA' => 'Celestia', 'FIL' => 'Filecoin',
-            'STX' => 'Stacks', 'ETC' => 'Ethereum Classic', 'ALGO' => 'Algorand', 'NEAR' => 'Near'
+            'STX' => 'Stacks', 'ETC' => 'Ethereum Classic', 'ALGO' => 'Algorand'
         ];
 
-        // Call Binance Public Price API
+        // Fetch live market data via cURL
         $ch = curl_init('https://api.binance.com/api/v3/ticker/price');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
@@ -71,16 +65,16 @@ class LiveArbitrageEngine {
         if ($response) {
             $data = json_decode($response, true);
             if (is_array($data)) {
-                foreach ($data as item) {
-                    if (str_ends_with(item['symbol'], 'USDT')) {
-                        $symbol = str_replace('USDT', '', item['symbol']);
-                        $binancePrices[$symbol] = (float)item['price'];
+                foreach ($data as $item) { // FIXED: added $ sign
+                    if (str_ends_with($item['symbol'], 'USDT')) { // FIXED: added $ sign
+                        $symbol = str_replace('USDT', '', $item['symbol']); // FIXED: added $ sign
+                        $binancePrices[$symbol] = (float)$item['price']; // FIXED: added $ sign
                     }
                 }
             }
         }
 
-        $exchanges = ['Binance', 'OKX', 'Bybit', 'KuCoin', 'Kraken'];
+        $exchanges = ['Binance', 'OKX', 'Bybit', 'KuCoin', 'Kraken', 'Gate.io', 'Uniswap v3 (DEX)', 'Hyperliquid'];
         $pdo->exec("TRUNCATE TABLE arbitrage_deals");
 
         $stmtInsert = $pdo->prepare("
@@ -88,20 +82,16 @@ class LiveArbitrageEngine {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
-        $counter = 0;
         foreach ($coins as $symbol => $name) {
-            // Base price from live API or fallback mock value if API fails
-            $basePrice = $binancePrices[$symbol] ?? ($symbol === 'BTC' ? 68000 : ($symbol === 'ETH' ? 3500 : 100));
+            $basePrice = $binancePrices[$symbol] ?? 100.00;
 
-            // Select two different exchanges for cross-exchange arbitrage
             $buyEx = $exchanges[array_rand($exchanges)];
             do {
                 $sellEx = $exchanges[array_rand($exchanges)];
             } while ($sellEx === $buyEx);
 
-            // Generate realistic profit percentage spread (mix of low <=3% and high >3% opportunities)
-            // Ensure we generate over 25 unique items
-            $profitSpread = round((rand(80, 450) / 100), 2); // 0.80% to 4.50%
+            // Mix of yields <= 3% (unlocked for all) and > 3% (gated for $3,000+ balance)
+            $profitSpread = round((rand(80, 520) / 100), 2); // 0.80% to 5.20%
 
             $buyPrice = $basePrice;
             $sellPrice = $basePrice * (1 + ($profitSpread / 100));
@@ -114,20 +104,21 @@ class LiveArbitrageEngine {
                 round($buyPrice, 4),
                 round($sellPrice, 4),
                 $profitSpread,
-                rand(15, 98) . 'M USDT'
+                rand(12, 95) . 'M USDT'
             ]);
-
-            $counter++;
         }
     }
 
-    // Fetch all active deals with 3% gating rules applied
+    // Fetch and check locking status relative to user's real balance
     public static function getOpportunities($pdo, $userRealBalance = 0) {
+        self::refreshPricesIfNeeded($pdo);
+        
         $stmt = $pdo->query("SELECT * FROM arbitrage_deals ORDER BY profit_percentage DESC");
         $deals = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($deals as &$deal) {
-            $deal['is_locked'] = ((float)$deal['profit_percentage'] > 3.00 && (float)$userRealBalance < 3000);
+            // Lock platforms if yield > 3.00% and user balance < $3000
+            $deal['is_locked'] = ((float)$deal['profit_percentage'] > 3.00 && (float)$userRealBalance < 3000.00);
         }
         return $deals;
     }
