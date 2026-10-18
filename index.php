@@ -841,7 +841,7 @@ $whatsapp_number = preg_replace('/[^0-9]/', '',$support['phone']);
                                 ${isLocked ? `
                                     <a href="deposit.php" class="btn-trade btn-locked"><i class="fa-solid fa-lock"></i> Deposit to Unlock</a>
                                 ` : `
-                                    <a href="trade-execution.php?symbol=${d.symbol}&id=${d.id}" class="btn-trade"><i class="fa-solid fa-bolt"></i> Execute Trade</a>
+                                    <a href="trade.php?symbol=${d.symbol}&id=${d.id}" class="btn-trade"><i class="fa-solid fa-bolt"></i> Execute Trade</a>
                                 `}
                             </div>
                         </div>
